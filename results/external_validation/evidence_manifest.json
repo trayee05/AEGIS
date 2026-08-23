@@ -1,0 +1,157 @@
+{
+  "artifacts": {
+    "EXTERNAL_VALIDATION.md": {
+      "bytes": 3530,
+      "sha256": "23feccff1ee66f1e0e87f391f0eb86ff615c09166e5d4403aae5ffdf2334602b"
+    },
+    "fig1_safety_utility.png": {
+      "bytes": 60265,
+      "sha256": "565c02981d6a6783aeb1fb16e386765550f28f7746178bdf08b6d79ff1371fb6"
+    },
+    "fig2_recall_precision_bsr.png": {
+      "bytes": 35783,
+      "sha256": "54a3822f4f2ec4dcdec1f0334863e5a44f398a2d72655f39e16c9e55a3f1f4c5"
+    },
+    "fig3_provenance_sensitivity.png": {
+      "bytes": 41277,
+      "sha256": "897133ee531141687948512a188188ebc16ab8f4ea5d433344170398cb92194c"
+    },
+    "fig4_overhead.png": {
+      "bytes": 28798,
+      "sha256": "b7a1ca896ec36336d52dad6a7c09966d33ef2b9fa0c3a3ea8ad80075a3d1662f"
+    },
+    "metrics.csv": {
+      "bytes": 14365,
+      "sha256": "6fb1af4ec4b2a7288d8753e1c712d94e46ba9881b2fe87cf980ce63dcb5f559e"
+    },
+    "report.md": {
+      "bytes": 12392,
+      "sha256": "141faa563acf56025b5eb8383e362e5b9799b6a3978596a5afde24a1e082f1f1"
+    },
+    "results.json": {
+      "bytes": 130301,
+      "sha256": "51482f9b0797f47eae373d3a0ab1ca0685781950b8743482519fec2b5c50e4d8"
+    }
+  },
+  "claim": {
+    "statement": "AEGIS-Care was evaluated on synthetic FHIR records using paired, deterministic recovery scenarios. This is not clinical validation, a medical-device claim, or evidence of improved patient outcomes.",
+    "synthetic_evidence_only": true,
+    "tier": "external-format mechanism validation"
+  },
+  "data_source": {
+    "bundles_loaded": 10,
+    "bundles_seen": 11,
+    "claim_tier": "external-format mechanism validation",
+    "patients_loaded": 10,
+    "profiles_seen": {
+      "http://hl7.org/fhir/us/core/StructureDefinition/head-occipital-frontal-circumference-percentile": 13,
+      "http://hl7.org/fhir/us/core/StructureDefinition/pediatric-bmi-for-age": 27,
+      "http://hl7.org/fhir/us/core/StructureDefinition/pediatric-weight-for-height": 13,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-blood-pressure": 108,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-bmi": 97,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-body-height": 106,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-body-weight": 106,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition-encounter-diagnosis": 297,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-encounter": 434,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-head-circumference": 13,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-heart-rate": 108,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medicationrequest": 271,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-clinical-result": 3,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-lab": 2711,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-pregnancystatus": 4,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-screening-assessment": 392,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient": 10,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-respiratory-rate": 108,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-simple-observation": 106,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-smokingstatus": 106
+    },
+    "references_rewritten": 7003,
+    "resources_ignored": {
+      "AllergyIntolerance": 2,
+      "CarePlan": 29,
+      "CareTeam": 29,
+      "Claim": 705,
+      "Device": 49,
+      "DiagnosticReport": 757,
+      "DocumentReference": 434,
+      "ExplanationOfBenefit": 705,
+      "ImagingStudy": 32,
+      "Immunization": 152,
+      "Medication": 30,
+      "MedicationAdministration": 30,
+      "Procedure": 1351,
+      "Provenance": 10,
+      "SupplyDelivery": 167
+    },
+    "resources_loaded": {
+      "Condition": 297,
+      "Encounter": 434,
+      "MedicationRequest": 271,
+      "Observation": 2611,
+      "Patient": 10
+    },
+    "source_files": [
+      "synthea_sample_data_fhir_latest.zip"
+    ],
+    "source_label": "Synthea public sample FHIR R4",
+    "source_sha256": {
+      "synthea_sample_data_fhir_latest.zip": "56cb9e49f7ba6ad4e61c40aa80999f8c10a710823fed1becdf2502053777a521"
+    },
+    "synthetic_evidence_only": true,
+    "unresolved_urn_references": 0,
+    "validation_errors": []
+  },
+  "evaluation": {
+    "condition_runs": 108,
+    "full_care": {
+      "bsr": 1.0,
+      "condition": "I",
+      "descendant_precision": 1.0,
+      "descendant_recall": 1.0,
+      "drr": 0.0,
+      "false_repair_rate": 0.0,
+      "n": 12,
+      "oh_capsule_bytes": 11613.5833,
+      "oh_fhir_reads": 26.75,
+      "oh_model_calls": 16.75,
+      "oh_replays": 9.5,
+      "oh_wall_seconds": 0.6141,
+      "rts": 1.0,
+      "rwh": 0.0,
+      "uer": 0.0
+    },
+    "incidents": 12,
+    "verification_failures": [],
+    "wall_seconds": 159.184
+  },
+  "generated_at": "2026-08-23T16:26:53.618667+00:00",
+  "limitations": [
+    "All records are synthetic Synthea records; no real patient data or clinical outcomes are used.",
+    "The deterministic clinical composer validates recovery mechanics, not open-ended LLM behaviour.",
+    "The external run validates FHIR R4 shape and source independence, not hospital workflow integration.",
+    "Family F3 adds a deterministic restricted-field incident overlay because Synthea does not encode the study's local role policy.",
+    "Thresholds remain those frozen in the proposal; this run is not a prospective clinical study."
+  ],
+  "runtime": {
+    "command": "python -m aegis_care.cli external-validate --fhir <path> --limit-patients 10 --out C:\\Users\\TRAYEE\\Documents\\Codex\\2026-08-23\\hey-this-is-the-initial-proposal\\work\\aegis-care-main\\results\\external_validation",
+    "packages": {
+      "aegis-care": "not-installed",
+      "cryptography": "50.0.0",
+      "fastapi": "0.141.1",
+      "httpx": "0.28.1",
+      "matplotlib": "3.11.1",
+      "numpy": "2.3.5",
+      "pandas": "3.0.1",
+      "pydantic": "2.13.4",
+      "pytest": "9.1.1",
+      "scikit-learn": "1.9.0"
+    },
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.13 (main, Aug  7 2026, 02:26:41) [MSC v.1944 64 bit (AMD64)]"
+  },
+  "schema": "aegis-evidence-manifest/v1",
+  "verification": {
+    "experiment_verification_failures": [],
+    "loader_validation_errors": []
+  }
+}

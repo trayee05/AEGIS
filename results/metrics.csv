@@ -1,0 +1,10 @@
+condition,incident_id,family,depth,provenance,edge_loss,rwh,descendant_recall,descendant_precision,bsr,rts,false_repair_rate,uer,drr,oh_fhir_reads,oh_model_calls,oh_replays,oh_writes,n_true_contaminated,n_neutralised,n_touched,n_clean,n_retained,n_repaired,n_followups,n_wrong_followups,oh_wall_seconds,oh_capsules,oh_capsule_bytes,oh_rounds
+A,INC-F1-T-ID-01-d4-complete-s0,F1,4,complete,0.0,0.3333333333333333,0.0,1.0,1.0,0.5,0.0,0.0,1.0,0,0,0,0,4,0,0,5,5,0,2,1,,,,
+B,INC-F1-T-ID-01-d4-complete-s0,F1,4,complete,0.0,0.3333333333333333,0.0,1.0,1.0,0.5,0.0,0.0,1.0,0,0,0,0,4,0,0,5,5,0,2,1,,,,
+C,INC-F1-T-ID-01-d4-complete-s0,F1,4,complete,0.0,0.0,1.0,0.4444444444444444,0.0,1.0,0.0,0.0,1.0,0,0,0,0,4,4,9,5,0,0,2,0,,,,
+D,INC-F1-T-ID-01-d4-complete-s0,F1,4,complete,0.0,0.0,1.0,1.0,1.0,1.0,0.0,0.0,0.0,12,8,4,0,4,4,4,5,5,0,2,0,0.1857,15.0,13580.0,4.0
+E,INC-F1-T-ID-01-d4-complete-s0,F1,4,complete,0.0,0.0,1.0,1.0,1.0,1.0,0.0,0.0,0.0,18,13,8,4,4,4,4,5,5,4,2,0,0.213,15.0,13580.0,4.0
+F,INC-F1-T-ID-01-d4-complete-s0,F1,4,complete,0.0,0.0,1.0,0.4444444444444444,0.0,1.0,0.0,0.0,0.0,0,0,0,0,4,4,9,5,0,0,2,0,0.3575,30.0,27162.0,2.0
+G,INC-F1-T-ID-01-d4-complete-s0,F1,4,complete,0.0,0.0,1.0,1.0,1.0,1.0,0.0,1.0,1.0,0,0,0,0,4,4,4,5,5,0,2,0,,,,
+H,INC-F1-T-ID-01-d4-complete-s0,F1,4,complete,0.0,0.0,1.0,1.0,1.0,1.0,0.0,0.0,1.0,6,5,4,4,4,4,4,5,5,4,2,0,,,,
+I,INC-F1-T-ID-01-d4-complete-s0,F1,4,complete,0.0,0.0,1.0,1.0,1.0,1.0,0.0,0.0,0.0,32,22,13,4,4,4,4,5,5,4,2,0,0.4779,15.0,13580.0,2.0
