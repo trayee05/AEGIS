@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
+import time
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -52,6 +53,9 @@ class AppState:
         self.experiment: Optional[Dict[str, Any]] = None
         self.experiment_status = "idle"
         self.experiment_log: List[str] = []
+        self.experiment_runner: Optional[ExperimentRunner] = None
+        self.experiment_error: Optional[str] = None
+        self.experiment_started_at: Optional[float] = None
 
     def reset(self) -> None:
         self.env = AegisEnvironment()
@@ -562,12 +566,22 @@ async def run_experiment(req: ExperimentRequest) -> Dict[str, Any]:
 
     state.experiment_status = "running"
     state.experiment_log = []
+    state.experiment_error = None
+    state.experiment_started_at = time.time()
 
     def progress(message: str) -> None:
         state.experiment_log.append(message)
 
+    runner = ExperimentRunner(progress=progress)
+    # Published before the first cell runs so /api/experiment/status can report a
+    # determinate completed/total from the very first poll.
+    runner.total_cells = len(ExperimentRunner.plan(
+        families=tuple(req.families), depths=tuple(req.depths),
+        provenance_conditions=tuple(req.provenance_conditions),
+        tasks_per_family=req.tasks_per_family))
+    state.experiment_runner = runner
+
     def work() -> Dict[str, Any]:
-        runner = ExperimentRunner(progress=progress)
         return runner.run(
             families=tuple(req.families), depths=tuple(req.depths),
             provenance_conditions=tuple(req.provenance_conditions),
@@ -578,7 +592,10 @@ async def run_experiment(req: ExperimentRequest) -> Dict[str, Any]:
         results = await asyncio.to_thread(work)
     except Exception as exc:
         state.experiment_status = "failed"
+        state.experiment_error = str(exc)
         raise HTTPException(500, f"experiment failed: {exc}")
+    finally:
+        state.experiment_runner = None
 
     state.experiment = results
     state.experiment_status = "complete"
@@ -600,8 +617,20 @@ async def run_experiment(req: ExperimentRequest) -> Dict[str, Any]:
 
 @app.get("/api/experiment/status")
 def experiment_status() -> Dict[str, Any]:
+    runner = state.experiment_runner
+    total = runner.total_cells if runner else 0
+    completed = runner.completed_cells if runner else 0
+    if state.experiment_status == "complete" and total == 0:
+        total = completed = len(state.experiment["incidents"]) if state.experiment else 0
+    elapsed = (round(time.time() - state.experiment_started_at, 1)
+               if state.experiment_started_at else 0.0)
     return {"status": state.experiment_status,
             "log": state.experiment_log[-50:],
+            "completed_cells": completed,
+            "total_cells": total,
+            "fraction": round(completed / total, 4) if total else 0.0,
+            "elapsed_seconds": elapsed,
+            "error": state.experiment_error,
             "has_results": state.experiment is not None}
 
 

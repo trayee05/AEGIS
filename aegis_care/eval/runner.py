@@ -49,11 +49,48 @@ class ExperimentRunner:
         self.metrics: List[MetricSet] = []
         self.incidents_run: List[Dict[str, Any]] = []
         self.verification_failures: List[Dict[str, Any]] = []
+        # Determinate progress: the cell plan is known before any work starts,
+        # so a caller can render a real progress bar rather than a spinner.
+        self.total_cells: int = 0
+        self.completed_cells: int = 0
 
     # ------------------------------------------------------------------
     def _log(self, message: str) -> None:
         if self.progress:
             self.progress(message)
+
+    # ------------------------------------------------------------------
+    @staticmethod
+    def plan(
+        *,
+        families: Sequence[str] = FAMILIES,
+        depths: Sequence[int] = (2, 3, 4),
+        provenance_conditions: Sequence[str] = ("complete", "random40", "targeted"),
+        tasks_per_family: int = 2,
+        seeds: Sequence[int] = (0,),
+    ) -> List[Dict[str, Any]]:
+        """Enumerate the (seed, family, depth, task, provenance) cells a run will
+        execute, applying the same seed-depth feasibility filter as ``run``.
+
+        Exposed separately so the API can report ``completed/total`` before the
+        first cell finishes.
+        """
+        from ..incident.scenarios import FAMILY_INFO
+
+        cells: List[Dict[str, Any]] = []
+        for model_seed in seeds:
+            for family in families:
+                for depth in depths:
+                    if depth < FAMILY_INFO[family]["seed_depth"] + 1:
+                        continue
+                    for task_index in range(tasks_per_family):
+                        for provenance in provenance_conditions:
+                            cells.append({
+                                "model_seed": model_seed, "family": family,
+                                "depth": depth, "task_index": task_index,
+                                "provenance": provenance,
+                            })
+        return cells
 
     # ==================================================================
     def run(
@@ -71,16 +108,18 @@ class ExperimentRunner:
         self.metrics = []
         self.incidents_run = []
 
-        for model_seed in seeds:
-            for family in families:
-                for depth in depths:
-                    from ..incident.scenarios import FAMILY_INFO
-                    if depth < FAMILY_INFO[family]["seed_depth"] + 1:
-                        continue
-                    for task_index in range(tasks_per_family):
-                        for provenance in provenance_conditions:
-                            self._run_cell(family, depth, task_index, provenance,
-                                           conditions, n_controls, model_seed)
+        cells = self.plan(families=families, depths=depths,
+                          provenance_conditions=provenance_conditions,
+                          tasks_per_family=tasks_per_family, seeds=seeds)
+        self.total_cells = len(cells)
+        self.completed_cells = 0
+        self._log(f"planned {self.total_cells} cell(s) × {len(conditions)} condition(s)")
+
+        for cell in cells:
+            self._run_cell(cell["family"], cell["depth"], cell["task_index"],
+                           cell["provenance"], conditions, n_controls,
+                           cell["model_seed"])
+            self.completed_cells += 1
 
         elapsed = time.perf_counter() - started
         return {

@@ -212,3 +212,53 @@ class TestExperimentEndpoint:
             "provenance_conditions": ["complete"], "tasks_per_family": 1})
         text = client.get("/api/experiment/report").text
         assert "AEGIS-Care experimental report" in text
+
+
+class TestEvidenceDirectoryIsolation:
+    """A plain `pytest -q` must never overwrite the committed evidence package.
+
+    POST /api/experiment writes tables, figures, and the report to
+    config.RESULTS_DIR. conftest redirects that to a temporary directory before
+    aegis_care is imported; this asserts the redirect is actually in force.
+    """
+
+    def test_results_dir_is_redirected_away_from_the_repo(self):
+        from aegis_care.config import PROJECT_ROOT, RESULTS_DIR
+
+        assert RESULTS_DIR != PROJECT_ROOT / "results"
+        assert PROJECT_ROOT not in RESULTS_DIR.parents
+
+    def test_experiment_writes_only_to_the_redirected_dir(self, client, results_tmp_dir):
+        from pathlib import Path
+
+        committed = Path(__file__).resolve().parent.parent / "results" / "results.json"
+        before = committed.read_bytes() if committed.exists() else None
+
+        body = client.post("/api/experiment", json={
+            "families": ["F1"], "depths": [4],
+            "provenance_conditions": ["complete"], "tasks_per_family": 1}).json()
+        assert body["status"] == "complete"
+
+        assert (Path(results_tmp_dir) / "results.json").exists()
+        if before is not None:
+            assert committed.read_bytes() == before, \
+                "the test suite overwrote the committed evidence package"
+
+
+class TestExperimentStatus:
+    def test_status_is_idle_and_determinate_before_any_run(self, client):
+        body = client.get("/api/experiment/status").json()
+        assert body["status"] in {"idle", "complete", "failed"}
+        assert body["total_cells"] >= 0
+        assert 0.0 <= body["fraction"] <= 1.0
+
+    def test_status_reports_progress_fields_after_a_run(self, client):
+        client.post("/api/experiment", json={
+            "families": ["F1"], "depths": [4],
+            "provenance_conditions": ["complete"], "tasks_per_family": 1})
+        body = client.get("/api/experiment/status").json()
+        assert body["status"] == "complete"
+        assert body["has_results"] is True
+        assert body["error"] is None
+        assert body["elapsed_seconds"] >= 0
+        assert any("planned" in line for line in body["log"])

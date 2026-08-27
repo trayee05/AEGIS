@@ -39,30 +39,138 @@ async function api(path, opts) {
   return ct.includes("application/json") ? res.json() : res.text();
 }
 
+/* ---------------- toasts ----------------
+ * Inline notices stay authoritative for results; toasts carry the transient
+ * "it worked / it failed" signal so a failure inside a collapsed view is not
+ * silent.
+ */
+function toast(title, { detail = "", kind = "", timeout = 5200 } = {}) {
+  const stack = $("toast-stack");
+  if (!stack) return;
+  const node = el("div", `toast ${kind}`);
+  const body = el("div", "toast-body");
+  body.appendChild(el("div", "toast-title", esc(title)));
+  if (detail) body.appendChild(el("div", "toast-detail", esc(detail)));
+  node.appendChild(body);
+  const close = el("button", "toast-close", "&times;");
+  close.type = "button";
+  close.setAttribute("aria-label", "Dismiss notification");
+  const dismiss = () => {
+    if (!node.isConnected) return;
+    node.classList.add("leaving");
+    node.addEventListener("animationend", () => node.remove(), { once: true });
+  };
+  close.addEventListener("click", dismiss);
+  node.appendChild(close);
+  stack.appendChild(node);
+  while (stack.children.length > 4) stack.firstElementChild.remove();
+  if (timeout) window.setTimeout(dismiss, timeout);
+}
+
+/* ---------------- theme ---------------- */
+const THEME_KEY = "aegis-theme";
+function readStoredTheme() {
+  try { return localStorage.getItem(THEME_KEY); } catch (e) { return null; }
+}
+function currentTheme() {
+  const explicit = document.documentElement.dataset.theme;
+  if (explicit === "dark" || explicit === "light") return explicit;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* storage blocked */ }
+  const btn = $("theme-toggle");
+  if (btn) {
+    const next = theme === "dark" ? "light" : "dark";
+    btn.setAttribute("aria-label", `Switch to ${next} theme`);
+    btn.setAttribute("title", `Switch to ${next} theme`);
+  }
+  // The memory graph paints its own SVG colours, so it has to be redrawn.
+  if ($("view-graph")?.classList.contains("active")) drawGraph();
+}
+function initTheme() {
+  applyTheme(readStoredTheme() === "light" || readStoredTheme() === "dark"
+    ? readStoredTheme() : currentTheme());
+  $("theme-toggle")?.addEventListener("click", () =>
+    applyTheme(currentTheme() === "dark" ? "light" : "dark"));
+  // Follow the OS only while the user has not made an explicit choice.
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
+    if (!readStoredTheme()) applyTheme(e.matches ? "dark" : "light");
+  });
+}
+
 /* ---------------- navigation ---------------- */
-function activateView(name, { scroll = true } = {}) {
+const TABS = () => Array.from(document.querySelectorAll("nav.tabs button[data-view]"));
+
+function activateView(name, { scroll = true, focusTab = false } = {}) {
   const view = $(`view-${name}`);
   if (!view) return;
-  document.querySelectorAll("nav.tabs button").forEach((b) =>
-    b.classList.toggle("active", b.dataset.view === name));
+  TABS().forEach((b) => {
+    const active = b.dataset.view === name;
+    b.classList.toggle("active", active);
+    b.setAttribute("aria-selected", active ? "true" : "false");
+    // Roving tabindex: one stop for the tablist, arrows move between tabs.
+    b.tabIndex = active ? 0 : -1;
+    if (active && focusTab) b.focus();
+  });
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
   view.classList.add("active");
+  if (history.replaceState) history.replaceState(null, "", `#${name}`);
   if (name === "graph") drawGraph();
   if (name === "audit") loadAudit();
   if (name === "review") loadReview();
   if (scroll) window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-$("tabs").addEventListener("click", (e) => {
-  const btn = e.target.closest("button[data-view]");
-  if (!btn) return;
-  activateView(btn.dataset.view);
-});
+function initTabs() {
+  TABS().forEach((btn) => {
+    const name = btn.dataset.view;
+    btn.type = "button";
+    btn.setAttribute("role", "tab");
+    btn.id = `tab-${name}`;
+    btn.setAttribute("aria-controls", `view-${name}`);
+    btn.setAttribute("aria-selected", btn.classList.contains("active") ? "true" : "false");
+    btn.tabIndex = btn.classList.contains("active") ? 0 : -1;
+    const view = $(`view-${name}`);
+    if (view) {
+      view.setAttribute("role", "tabpanel");
+      view.setAttribute("aria-labelledby", `tab-${name}`);
+      view.tabIndex = 0;
+    }
+  });
 
-document.addEventListener("click", (e) => {
-  const target = e.target.closest("[data-view-target]");
-  if (target) activateView(target.dataset.viewTarget);
-});
+  $("tabs").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-view]");
+    if (btn) activateView(btn.dataset.view);
+  });
+
+  $("tabs").addEventListener("keydown", (e) => {
+    const keys = { ArrowRight: 1, ArrowLeft: -1, Home: "first", End: "last" };
+    if (!(e.key in keys)) return;
+    const tabs = TABS();
+    const at = tabs.findIndex((b) => b.getAttribute("aria-selected") === "true");
+    let next;
+    if (keys[e.key] === "first") next = 0;
+    else if (keys[e.key] === "last") next = tabs.length - 1;
+    else next = (at + keys[e.key] + tabs.length) % tabs.length;
+    e.preventDefault();
+    activateView(tabs[next].dataset.view, { scroll: false, focusTab: true });
+  });
+
+  document.addEventListener("click", (e) => {
+    const target = e.target.closest("[data-view-target]");
+    if (target) activateView(target.dataset.viewTarget);
+  });
+
+  // Deep links and the browser back button both address a view by hash.
+  const fromHash = () => {
+    const name = location.hash.replace("#", "");
+    if (name && $(`view-${name}`)) activateView(name, { scroll: false });
+  };
+  window.addEventListener("hashchange", fromHash);
+  fromHash();
+}
 
 /* ---------------- table helper ---------------- */
 function table(rows, columns, opts = {}) {
@@ -100,6 +208,8 @@ function stateBadge(s) { return `<span class="badge ${esc(s)}">${esc(s)}</span>`
 
 /* ---------------- boot ---------------- */
 async function boot() {
+  initTheme();
+  initTabs();
   const health = await api("/api/health");
   $("version").textContent = `v${health.version} · ${health.model}`;
   STATE.system = await api("/api/system");
@@ -109,6 +219,7 @@ async function boot() {
   populateSelectors();
   initQuickLab();
   initMotion();
+  initGraphViewport();
   await refreshIncidents();
 }
 
@@ -175,9 +286,29 @@ function renderEvidence() {
   const e = STATE.evidence || {};
   const verified = e.status === "verified";
   $("external-tier-state").textContent = verified ? "VERIFIED" : "NOT RUN";
+  const checked = e.integrity?.artifacts_checked ?? 0;
+  const failures = e.integrity?.failures?.length ?? 0;
   $("evidence-seal").innerHTML = verified
-    ? `HASH-BOUND<br>PACKAGE<br>VERIFIED`
-    : `EVIDENCE<br>RUN<br>PENDING`;
+    ? `<div class="seal is-valid">
+         <div class="seal-ring" aria-hidden="true">
+           <svg viewBox="0 0 24 24"><path d="M4 12.6l5.2 5.2L20 7"/></svg>
+         </div>
+         <div class="seal-copy">
+           <strong>Hash-bound package</strong>
+           <span>SHA-256 verified · ${esc(checked)} artifacts re-hashed</span>
+         </div>
+       </div>`
+    : `<div class="seal is-broken">
+         <div class="seal-ring" aria-hidden="true">
+           <svg viewBox="0 0 24 24"><path d="M12 6.5v7M12 17.4v.2"/></svg>
+         </div>
+         <div class="seal-copy">
+           <strong>${failures ? "Integrity check failed" : "Evidence run pending"}</strong>
+           <span>${failures
+             ? `${esc(failures)} of ${esc(checked)} artifacts do not match their digest`
+             : "No external validation package found in this runtime"}</span>
+         </div>
+       </div>`;
   const out = $("evidence-results");
   out.innerHTML = "";
   if (!verified) {
@@ -384,11 +515,15 @@ function initQuickLab() {
       $("quick-summary").innerHTML = `<span class="summary-dot"></span><b>${esc(detail.family_info?.name || detail.family)}</b> injected. ` +
         `${detail.true_contaminated.length} descendants are contaminated; ${detail.provenance?.edges_removed || 0} visible edges are now missing.`;
       $("btn-quick-recover").disabled = false;
+      toast("Trajectory injected", {
+        detail: `${detail.incident_id} · ${detail.true_contaminated.length} contaminated descendants.`,
+      });
       await refreshIncidents();
       ["care-incident", "bl-incident", "pv-incident"].forEach((id) => { $(id).value = created.incident_id; });
     } catch (error) {
       $("quick-summary").innerHTML = `<span class="summary-dot"></span><b>Injection failed:</b> ${esc(error.message)}`;
       $("trajectory-canvas").innerHTML = `<div class="trajectory-empty">${esc(error.message)}</div>`;
+      toast("Injection failed", { detail: error.message, kind: "bad" });
     } finally {
       btn.disabled = false;
     }
@@ -410,9 +545,14 @@ function initQuickLab() {
       const metrics = recovery.metrics || {};
       $("quick-summary").innerHTML = `<span class="summary-dot"></span><b>${recovery.certificate?.safe_resume ? "Safe resume approved." : "Review required."}</b> ` +
         `${recovery.repaired.length} affected artifacts rebuilt; residual harm ${fmt(metrics.rwh)}; benign state retained ${fmt(metrics.bsr)}.`;
+      toast(recovery.certificate?.safe_resume ? "Safe resume approved" : "Review required", {
+        detail: `${recovery.repaired.length} rebuilt · RWH ${fmt(metrics.rwh)} · BSR ${fmt(metrics.bsr)}.`,
+        kind: recovery.certificate?.safe_resume ? "good" : "warn",
+      });
       await refreshIncidents();
     } catch (error) {
       $("quick-summary").innerHTML = `<span class="summary-dot"></span><b>Recovery failed:</b> ${esc(error.message)}`;
+      toast("Recovery failed", { detail: error.message, kind: "bad" });
     } finally {
       btn.disabled = false;
     }
@@ -505,15 +645,28 @@ $("btn-create").addEventListener("click", async () => {
     $("care-incident").value = inc.incident_id;
     $("bl-incident").value = inc.incident_id;
     $("pv-incident").value = inc.incident_id;
+    toast("Incident created", { detail: inc.incident_id });
   } catch (e) {
     out.innerHTML = `<div class="notice bad">${esc(e.message)}</div>`;
+    toast("Incident creation failed", { detail: e.message, kind: "bad" });
   } finally { btn.disabled = false; }
 });
 
 $("btn-reset").addEventListener("click", async () => {
-  await api("/api/system/reset", { method: "POST" });
-  $("incident-result").innerHTML = '<div class="notice info">System reset.</div>';
-  await refreshIncidents();
+  const btn = $("btn-reset");
+  btn.disabled = true;
+  try {
+    await api("/api/system/reset", { method: "POST" });
+    $("incident-result").innerHTML = '<div class="notice info">System reset.</div>';
+    STATE.quickIncident = null;
+    STATE.quickRecovery = null;
+    STATE.lastRecovery = null;
+    $("btn-quick-recover").disabled = true;
+    await refreshIncidents();
+    toast("System reset", { detail: "Environment rebuilt; all incidents cleared." });
+  } catch (e) {
+    toast("Reset failed", { detail: e.message, kind: "bad" });
+  } finally { btn.disabled = false; }
 });
 
 function renderChain(nodes, seedKey) {
@@ -597,9 +750,14 @@ $("btn-recover").addEventListener("click", async () => {
     const r = await api("/api/recover", { method: "POST", body: JSON.stringify(body) });
     STATE.lastRecovery = r;
     renderRecovery(r, out);
+    toast(r.certificate?.safe_resume ? "Safe resume approved" : "Safe resume blocked", {
+      detail: `Closure in ${r.rounds} round(s) · ${r.repaired.length} rebuilt · ${r.quarantined.length} quarantined.`,
+      kind: r.certificate?.safe_resume ? "good" : "warn",
+    });
     await refreshIncidents();
   } catch (e) {
     out.innerHTML = `<div class="notice bad">${esc(e.message)}</div>`;
+    toast("Recovery failed", { detail: e.message, kind: "bad" });
   } finally { btn.disabled = false; }
 });
 
@@ -865,10 +1023,15 @@ async function loadReview() {
         const b = el("button", `btn small ${decision === "reject" ? "danger" : "ghost"}`,
           decision.replace("_", " "));
         b.addEventListener("click", async () => {
-          await api("/api/review", {
-            method: "POST",
-            body: JSON.stringify({ memory_key: `${item.memory_id}@v${item.version}`, decision }),
-          });
+          try {
+            await api("/api/review", {
+              method: "POST",
+              body: JSON.stringify({ memory_key: `${item.memory_id}@v${item.version}`, decision }),
+            });
+            toast(`Recorded: ${decision.replace("_", " ")}`, { detail: item.memory_id, kind: "good" });
+          } catch (err) {
+            toast("Review decision failed", { detail: err.message, kind: "bad" });
+          }
           loadReview();
         });
         row.appendChild(b);
@@ -886,6 +1049,7 @@ $("btn-review-refresh").addEventListener("click", loadReview);
 async function drawGraph() {
   const svg = $("graph-svg");
   svg.innerHTML = "";
+  GRAPH_VIEW.base = null;   // nothing to pan or zoom until a graph is drawn
   let data;
   try { data = await api("/api/memory/none/graph"); }
   catch (e) {
@@ -907,8 +1071,8 @@ async function drawGraph() {
   const W = Math.max(960, svg.parentElement?.clientWidth || 1100, maxLayerSize * 102 + 170);
   const H = 560;
   svg.style.width = `${W}px`;
-  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  resetGraphView(W, H);
   const laneH = H / roleOrder.length;
   const pos = {};
   roleOrder.forEach((role, li) => {
@@ -993,12 +1157,153 @@ async function drawGraph() {
 }
 $("btn-graph-refresh").addEventListener("click", drawGraph);
 
+/* ---------------- graph viewport (pan / zoom) ----------------
+ * The derivation graph outgrows its frame as soon as a few incidents exist.
+ * Zoom is applied to the SVG viewBox rather than a CSS transform so strokes
+ * and text stay crisp at every scale.
+ */
+const GRAPH_VIEW = { scale: 1, x: 0, y: 0, base: null };
+
+function applyGraphView() {
+  const svg = $("graph-svg");
+  if (!svg || !GRAPH_VIEW.base) return;
+  const [bw, bh] = GRAPH_VIEW.base;
+  const w = bw / GRAPH_VIEW.scale;
+  const h = bh / GRAPH_VIEW.scale;
+  svg.setAttribute("viewBox", `${GRAPH_VIEW.x} ${GRAPH_VIEW.y} ${w} ${h}`);
+  const readout = $("graph-zoom");
+  if (readout) readout.textContent = `${Math.round(GRAPH_VIEW.scale * 100)}%`;
+}
+
+function resetGraphView(width, height) {
+  GRAPH_VIEW.base = [width, height];
+  GRAPH_VIEW.scale = 1;
+  GRAPH_VIEW.x = 0;
+  GRAPH_VIEW.y = 0;
+  applyGraphView();
+}
+
+function zoomGraph(factor, origin) {
+  if (!GRAPH_VIEW.base) return;
+  const next = Math.min(4, Math.max(0.4, GRAPH_VIEW.scale * factor));
+  if (next === GRAPH_VIEW.scale) return;
+  const [bw, bh] = GRAPH_VIEW.base;
+  // Keep the point under the cursor fixed while the scale changes.
+  const fx = origin ? origin.fx : 0.5;
+  const fy = origin ? origin.fy : 0.5;
+  const px = GRAPH_VIEW.x + (bw / GRAPH_VIEW.scale) * fx;
+  const py = GRAPH_VIEW.y + (bh / GRAPH_VIEW.scale) * fy;
+  GRAPH_VIEW.scale = next;
+  GRAPH_VIEW.x = px - (bw / next) * fx;
+  GRAPH_VIEW.y = py - (bh / next) * fy;
+  applyGraphView();
+}
+
+function initGraphViewport() {
+  const host = $("graph-scroll");
+  if (!host) return;
+
+  host.addEventListener("wheel", (e) => {
+    if (!GRAPH_VIEW.base) return;
+    e.preventDefault();
+    const rect = host.getBoundingClientRect();
+    zoomGraph(e.deltaY < 0 ? 1.12 : 1 / 1.12, {
+      fx: (e.clientX - rect.left) / rect.width,
+      fy: (e.clientY - rect.top) / rect.height,
+    });
+  }, { passive: false });
+
+  let dragging = null;
+  host.addEventListener("pointerdown", (e) => {
+    if (!GRAPH_VIEW.base || e.button !== 0) return;
+    dragging = { px: e.clientX, py: e.clientY, ox: GRAPH_VIEW.x, oy: GRAPH_VIEW.y,
+                 rect: host.getBoundingClientRect() };
+    host.setPointerCapture(e.pointerId);
+    host.classList.add("is-panning");
+  });
+  host.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const [bw, bh] = GRAPH_VIEW.base;
+    GRAPH_VIEW.x = dragging.ox - (e.clientX - dragging.px) * (bw / GRAPH_VIEW.scale) / dragging.rect.width;
+    GRAPH_VIEW.y = dragging.oy - (e.clientY - dragging.py) * (bh / GRAPH_VIEW.scale) / dragging.rect.height;
+    applyGraphView();
+  });
+  const endDrag = (e) => {
+    if (!dragging) return;
+    dragging = null;
+    host.classList.remove("is-panning");
+    try { host.releasePointerCapture(e.pointerId); } catch (err) { /* already released */ }
+  };
+  host.addEventListener("pointerup", endDrag);
+  host.addEventListener("pointercancel", endDrag);
+
+  $("btn-graph-zoom-in")?.addEventListener("click", () => zoomGraph(1.25));
+  $("btn-graph-zoom-out")?.addEventListener("click", () => zoomGraph(1 / 1.25));
+  $("btn-graph-fit")?.addEventListener("click", () => {
+    if (GRAPH_VIEW.base) resetGraphView(...GRAPH_VIEW.base);
+  });
+}
+
 /* ---------------- experiment ---------------- */
+/* The matrix takes tens of seconds. /api/experiment/status publishes a
+ * determinate completed/total plus the runner's own log, so the button does
+ * not have to sit behind an unmoving spinner. */
+function experimentProgressCard(out) {
+  out.innerHTML = "";
+  const card = el("div", "progress-card");
+  card.innerHTML =
+    `<div class="progress-head">
+       <strong>Running the paired matrix</strong>
+       <span class="mono" id="ex-progress-count">preparing…</span>
+     </div>
+     <div class="progress-track indeterminate" id="ex-progress-track"
+          role="progressbar" aria-label="Experiment progress"
+          aria-valuemin="0" aria-valuemax="100">
+       <div class="progress-fill" id="ex-progress-fill" style="width:0%"></div>
+     </div>
+     <div class="progress-log" id="ex-progress-log"></div>`;
+  out.appendChild(card);
+  return card;
+}
+
+function startExperimentPolling() {
+  let stopped = false;
+  const tick = async () => {
+    if (stopped) return;
+    try {
+      const s = await api("/api/experiment/status");
+      const track = $("ex-progress-track");
+      const fill = $("ex-progress-fill");
+      const count = $("ex-progress-count");
+      if (track && fill && count) {
+        if (s.total_cells > 0) {
+          const pct = Math.round(s.fraction * 100);
+          track.classList.remove("indeterminate");
+          fill.style.width = `${pct}%`;
+          track.setAttribute("aria-valuenow", String(pct));
+          count.textContent =
+            `${s.completed_cells}/${s.total_cells} cells · ${pct}% · ${s.elapsed_seconds}s`;
+        } else {
+          count.textContent = `${s.elapsed_seconds}s elapsed`;
+        }
+      }
+      const log = $("ex-progress-log");
+      if (log && s.log?.length) {
+        log.innerHTML = s.log.slice(-14).map((line) => `<div>${esc(line)}</div>`).join("");
+        log.scrollTop = log.scrollHeight;
+      }
+    } catch (e) { /* a dropped poll must never abort the run itself */ }
+    if (!stopped) window.setTimeout(tick, 700);
+  };
+  tick();
+  return () => { stopped = true; };
+}
+
 $("btn-experiment").addEventListener("click", async () => {
   const btn = $("btn-experiment"); btn.disabled = true;
   const out = $("experiment-result");
-  out.innerHTML = '<div class="notice info"><span class="spinner"></span>' +
-    'Running the full matrix — this executes every condition on paired frozen state…</div>';
+  experimentProgressCard(out);
+  const stopPolling = startExperimentPolling();
   const sel = (id) => Array.from($(id).selectedOptions).map((o) => o.value);
   try {
     const body = {
@@ -1008,10 +1313,15 @@ $("btn-experiment").addEventListener("click", async () => {
       tasks_per_family: Number($("ex-tasks").value),
     };
     const r = await api("/api/experiment", { method: "POST", body: JSON.stringify(body) });
+    stopPolling();
     out.innerHTML = "";
     out.appendChild(el("div", "notice good",
       `Complete in ${r.wall_seconds}s — ${r.incidents} incidents, ${r.runs} condition runs.
        Tables, figures, and report written to <span class="mono">results/</span>.`));
+    toast("Experiment complete", {
+      detail: `${r.runs} condition runs over ${r.incidents} incidents in ${r.wall_seconds}s.`,
+      kind: "good",
+    });
 
     out.appendChild(el("h3", null, "Aggregate by condition"));
     out.appendChild(table(r.by_condition, [
@@ -1062,7 +1372,8 @@ $("btn-experiment").addEventListener("click", async () => {
     out.appendChild(link);
   } catch (e) {
     out.innerHTML = `<div class="notice bad">${esc(e.message)}</div>`;
-  } finally { btn.disabled = false; }
+    toast("Experiment failed", { detail: e.message, kind: "bad", timeout: 9000 });
+  } finally { stopPolling(); btn.disabled = false; }
 });
 
 /* ---------------- audit ---------------- */
@@ -1089,6 +1400,11 @@ $("btn-audit-refresh").addEventListener("click", loadAudit);
 
 /* ---------------- go ---------------- */
 boot().catch((e) => {
-  document.querySelector("main").innerHTML =
-    `<div class="notice bad">Failed to start: ${esc(e.message)}</div>`;
+  // Keep the shell (header, tabs, theme) so the failure is readable in context
+  // rather than replacing the entire console with one line of red text.
+  const view = document.querySelector(".view.active") || document.querySelector("main");
+  view.innerHTML =
+    `<div class="notice bad"><b>Failed to start.</b> ${esc(e.message)}<br>
+     <span class="small">The API did not answer. Confirm the server is running, then reload.</span></div>`;
+  toast("Dashboard failed to start", { detail: e.message, kind: "bad", timeout: 0 });
 });

@@ -65,8 +65,15 @@ python -m aegis_care.cli privacy       # empirical leakage attacks on our own in
 python -m aegis_care.cli experiment    # the full paired matrix -> results/
 python -m aegis_care.cli external-validate --fhir synthea_fhir.zip  # external-format proof
 python -m aegis_care.cli serve         # dashboard at http://127.0.0.1:8000
-pytest -q                              # 161 tests
+pytest -q                              # 172 tests
+
+python scripts/check_reproducible.py               # committed results must re-run identically
+python scripts/reseal_evidence.py results/external_validation --dry-run
 ```
+
+`pytest` writes its evidence artifacts to a temporary directory, never to `results/`, so a
+test run cannot overwrite the committed evidence package. Set `AEGIS_RESULTS_DIR` to
+redirect that output anywhere else.
 
 No GPU, no Docker, no network, and no model download are required: the default clinical
 model is a frozen deterministic composer, which also makes every counterfactual replay
@@ -234,7 +241,7 @@ Two honest readings:
 1. **Membership inference works.** An adversary holding a capsule can tell, well above
    chance, whether a given memory was in the incident's candidate set. This is a real
    residual leak. The system claims only that *raw content* is never exported through the
-   defined interface — and the released-field audit confirms exactly which 13 fields ever
+   defined interface — and the released-field audit confirms exactly which 14 fields ever
    leave a runtime, with zero raw-content fields among them.
 2. **Receiver scoping is load-bearing.** Cross-recipient linkage sits at chance (0.025).
    Remove the scoping and the same attack reaches **1.000** — an honest-but-curious
@@ -296,6 +303,7 @@ counterfactual replay, and clean-room rebuild all execute inside the owning runt
 | [`eval/`](aegis_care/eval/) | Baselines, metrics, statistics, privacy attacks, external validation, evidence manifest |
 | [`api/app.py`](aegis_care/api/app.py) | FastAPI service |
 | [`web/`](aegis_care/web/) | Reviewer dashboard |
+| [`scripts/`](scripts/) | Cross-machine reproducibility check and evidence-manifest re-sealing |
 
 ---
 
@@ -333,11 +341,18 @@ retention meaningful rather than decorative.
 - **Experiments** — the full matrix, writing tables, figures, and the report
 - **Audit Log** — the append-only event ledger
 
+The console is keyboard-navigable (arrow keys move between sections, `Home`/`End` jump to
+the ends, and a skip link precedes the header), deep-linkable (`/#graph`, `/#evidence`, …),
+and available in a light or dark theme that follows the operating system until you choose
+one explicitly. The memory graph pans and zooms; the experiment runner reports determinate
+`completed/total` progress from `GET /api/experiment/status` rather than an unbounded
+spinner.
+
 ---
 
 ## Verification
 
-`pytest -q` runs 161 tests. Beyond ordinary unit coverage, each of the six **core invariants**
+`pytest -q` runs 172 tests. Beyond ordinary unit coverage, each of the six **core invariants**
 of proposal Section 7.1 and each termination/safety property of Section 6.6 has an
 executable check in [`tests/test_invariants.py`](tests/test_invariants.py):
 
@@ -351,7 +366,20 @@ executable check in [`tests/test_invariants.py`](tests/test_invariants.py):
   fail-closed reconstruction, closed publication
 
 The experiment is deterministic: `test_results_are_reproducible` asserts two independent
-runs produce identical aggregates.
+runs produce identical aggregates. `scripts/check_reproducible.py` extends that across
+machines: it recovers the matrix parameters from the committed `results/results.json`,
+re-runs them here, and diffs every metric column while ignoring wall-clock timings, which
+are the only values allowed to move. CI runs it on every push.
+
+### Evidence seals are portable
+
+`.gitattributes` normalises text artifacts to LF, so a manifest that hashed raw bytes on a
+CRLF machine could never re-verify after a clone — the integrity seal failed on every
+Windows checkout. Text artifacts are now hashed after newline normalisation and binary
+artifacts byte-for-byte, with the method recorded in the manifest itself
+(`aegis-evidence-manifest/v2`). `scripts/reseal_evidence.py` migrates an older manifest and
+reports, per artifact, whether a digest moved because of line endings or because the
+content actually changed.
 
 ---
 
@@ -401,6 +429,10 @@ Taken directly from Section 11.2 of the proposal, and enforced in code:
   is represented by policy-controlled tombstones
 
 ---
+
+## Licence
+
+MIT — see [LICENSE](LICENSE), which also restates the research-only boundary above.
 
 ## Attribution
 

@@ -1,36 +1,44 @@
 {
   "artifacts": {
     "EXTERNAL_VALIDATION.md": {
-      "bytes": 3530,
-      "sha256": "23feccff1ee66f1e0e87f391f0eb86ff615c09166e5d4403aae5ffdf2334602b"
+      "bytes": 3460,
+      "hash_input": "newline-normalised",
+      "sha256": "ea5c48f659bd0be3ce63d9ac72964852f38c117f16f53d9b2014cad85b727d94"
     },
     "fig1_safety_utility.png": {
       "bytes": 60265,
+      "hash_input": "raw",
       "sha256": "565c02981d6a6783aeb1fb16e386765550f28f7746178bdf08b6d79ff1371fb6"
     },
     "fig2_recall_precision_bsr.png": {
       "bytes": 35783,
+      "hash_input": "raw",
       "sha256": "54a3822f4f2ec4dcdec1f0334863e5a44f398a2d72655f39e16c9e55a3f1f4c5"
     },
     "fig3_provenance_sensitivity.png": {
       "bytes": 41277,
+      "hash_input": "raw",
       "sha256": "897133ee531141687948512a188188ebc16ab8f4ea5d433344170398cb92194c"
     },
     "fig4_overhead.png": {
       "bytes": 28798,
+      "hash_input": "raw",
       "sha256": "b7a1ca896ec36336d52dad6a7c09966d33ef2b9fa0c3a3ea8ad80075a3d1662f"
     },
     "metrics.csv": {
-      "bytes": 14365,
-      "sha256": "6fb1af4ec4b2a7288d8753e1c712d94e46ba9881b2fe87cf980ce63dcb5f559e"
+      "bytes": 14256,
+      "hash_input": "newline-normalised",
+      "sha256": "af65c5243f0618998d41b44798b9912c988324c1bde23b32681ba6c2cffaefed"
     },
     "report.md": {
-      "bytes": 12392,
-      "sha256": "141faa563acf56025b5eb8383e362e5b9799b6a3978596a5afde24a1e082f1f1"
+      "bytes": 12152,
+      "hash_input": "newline-normalised",
+      "sha256": "b88e2c1e391351fc37d0625cd37f84d7065e19e9ea60f3937fa2241ec26643af"
     },
     "results.json": {
-      "bytes": 130301,
-      "sha256": "51482f9b0797f47eae373d3a0ab1ca0685781950b8743482519fec2b5c50e4d8"
+      "bytes": 125232,
+      "hash_input": "newline-normalised",
+      "sha256": "1d498be22e7cce56f43e5dab75afa801247d530b8cc5c2fe648a651be03f6c59"
     }
   },
   "claim": {
@@ -125,12 +133,38 @@
     "wall_seconds": 159.184
   },
   "generated_at": "2026-08-23T16:26:53.618667+00:00",
+  "hash_method": {
+    "algorithm": "sha256",
+    "note": "Text artifacts are hashed after CRLF/CR to LF normalisation so a seal survives checkout on any platform; binary artifacts are hashed byte-for-byte.",
+    "text_suffixes": [
+      ".csv",
+      ".json",
+      ".md",
+      ".txt",
+      ".yaml",
+      ".yml"
+    ]
+  },
   "limitations": [
     "All records are synthetic Synthea records; no real patient data or clinical outcomes are used.",
     "The deterministic clinical composer validates recovery mechanics, not open-ended LLM behaviour.",
     "The external run validates FHIR R4 shape and source independence, not hospital workflow integration.",
     "Family F3 adds a deterministic restricted-field incident overlay because Synthea does not encode the study's local role policy.",
     "Thresholds remain those frozen in the proposal; this run is not a prospective clinical study."
+  ],
+  "reseal_history": [
+    {
+      "content_changed_artifacts": [
+        "EXTERNAL_VALIDATION.md"
+      ],
+      "reason": "migrated to newline-normalised hashing (schema v1 -> v2)",
+      "rebound_artifacts": [
+        "EXTERNAL_VALIDATION.md",
+        "metrics.csv",
+        "report.md",
+        "results.json"
+      ]
+    }
   ],
   "runtime": {
     "command": "python -m aegis_care.cli external-validate --fhir <path> --limit-patients 10 --out C:\\Users\\TRAYEE\\Documents\\Codex\\2026-08-23\\hey-this-is-the-initial-proposal\\work\\aegis-care-main\\results\\external_validation",
@@ -149,7 +183,7 @@
     "platform": "Windows-11-10.0.26200-SP0",
     "python": "3.12.13 (main, Aug  7 2026, 02:26:41) [MSC v.1944 64 bit (AMD64)]"
   },
-  "schema": "aegis-evidence-manifest/v1",
+  "schema": "aegis-evidence-manifest/v2",
   "verification": {
     "experiment_verification_failures": [],
     "loader_validation_errors": []

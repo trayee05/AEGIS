@@ -17,7 +17,20 @@ EVIDENCE_PACKAGES = (
 )
 
 
+# Artifacts whose bytes are line-ending dependent. .gitattributes normalises
+# these to LF in the repository, but a checkout, an editor, or a Windows-native
+# run can leave CRLF on disk. Hashing the raw bytes would then break the seal
+# for reasons that have nothing to do with the evidence, so text artifacts are
+# hashed after newline normalisation and binary artifacts are hashed as-is.
+TEXT_SUFFIXES = frozenset({".md", ".csv", ".json", ".txt", ".yml", ".yaml"})
+
+
 def sha256_file(path: Path) -> str:
+    """SHA-256 of an artifact, normalised for text so the seal is portable."""
+    path = Path(path)
+    if path.suffix.lower() in TEXT_SUFFIXES:
+        raw = path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+        return hashlib.sha256(raw).hexdigest()
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
@@ -50,9 +63,14 @@ def write_evidence_manifest(
     artifacts: Dict[str, Dict[str, Any]] = {}
     for path in sorted({Path(p).resolve() for p in evidence_files}):
         if path.is_file():
+            text = path.suffix.lower() in TEXT_SUFFIXES
             artifacts[str(path.relative_to(out_dir)).replace("\\", "/")] = {
                 "sha256": sha256_file(path),
-                "bytes": path.stat().st_size,
+                # Normalised length for text, so `bytes` agrees with the digest
+                # on every platform rather than describing this checkout only.
+                "bytes": (len(path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n"))
+                          if text else path.stat().st_size),
+                "hash_input": "newline-normalised" if text else "raw",
             }
 
     full_care = next(
@@ -60,7 +78,14 @@ def write_evidence_manifest(
         {},
     )
     manifest = {
-        "schema": "aegis-evidence-manifest/v1",
+        "schema": "aegis-evidence-manifest/v2",
+        "hash_method": {
+            "algorithm": "sha256",
+            "text_suffixes": sorted(TEXT_SUFFIXES),
+            "note": ("Text artifacts are hashed after CRLF/CR to LF normalisation so a "
+                     "seal survives checkout on any platform; binary artifacts are "
+                     "hashed byte-for-byte."),
+        },
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "claim": {
             "tier": data_source.get("claim_tier", "mechanism validation"),

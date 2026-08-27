@@ -7,13 +7,18 @@ Every threshold and weight referenced by the proposal lives here so that the
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = PACKAGE_ROOT.parent
 DATA_DIR = PROJECT_ROOT / "data"
-RESULTS_DIR = PROJECT_ROOT / "results"
+
+# The evidence directory is redirectable so that a test run, a scratch
+# experiment, or a container mount cannot overwrite the committed evidence
+# package in results/. The test suite sets this to a temporary directory.
+RESULTS_DIR = Path(os.environ.get("AEGIS_RESULTS_DIR") or (PROJECT_ROOT / "results"))
 
 
 @dataclass(frozen=True)
