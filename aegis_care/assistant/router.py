@@ -224,9 +224,13 @@ class Router:
                 return replayed
             if offer and offer.get("action"):
                 self.context["offer"] = None
-                return {"action": offer["action"],
-                        "params": dict(offer.get("params") or {}),
-                        "source": "context", "reply": ""}
+                candidate = {"action": offer["action"],
+                             "params": dict(offer.get("params") or {}),
+                             "source": "context+confirmed", "reply": ""}
+                # A user may change roles while a plan is waiting.  Re-run the
+                # same role boundary used for typed/model-routed actions before
+                # treating the approval as executable.
+                return self._validate(candidate, role, text)
             return {"action": "system_status", "params": {}, "source": "context",
                     "reply": ""}
 
