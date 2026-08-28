@@ -136,14 +136,21 @@ class TestAssistantEndpoint:
         second = client.post("/api/assistant", json={
             "message": "run the recovery", "role": "safety"}).json()
         assert second["action"] == "run_recovery"
-        assert second["ui"]["recovered"] is True
+        assert second["requires_confirmation"] is True
+        assert second["plan"]["steps"]
+        assert second["ui"] == {}
+
+        approved = client.post("/api/assistant", json={
+            "message": "yes", "role": "safety"}).json()
+        assert approved["ui"]["recovered"] is True
         # The reply must carry real measured values, not model prose.
-        assert "rebuilt" in second["reply"]
+        assert "rebuilt" in approved["reply"]
 
     def test_patient_names_resolve_without_a_model(self, client):
         client.post("/api/assistant", json={
             "message": "we registered the wrong patient", "role": "safety"})
         client.post("/api/assistant", json={"message": "run recovery", "role": "safety"})
+        client.post("/api/assistant", json={"message": "yes", "role": "safety"})
         listing = client.get("/api/patients").json()["patients"]
         name = listing[0]["patient"]["name"].split()[0]
 
@@ -240,8 +247,9 @@ class TestAgenticBehaviour:
                     seen.add(suggestion["message"])
         assert seen
         for message in seen:
-            matched = any(match_local(message, r) for r in
-                          ("clinician", "safety", "compliance", "researcher"))
+            matched = message in {"yes", "no"} or any(
+                match_local(message, r) for r in
+                ("clinician", "safety", "compliance", "researcher"))
             assert matched, f"suggested phrasing needs the model: {message!r}"
 
     def test_yes_executes_the_standing_offer(self, client):
@@ -266,13 +274,66 @@ class TestAgenticBehaviour:
         assert client.get("/api/system").json()["stats"]
 
     def test_fix_everything_runs_the_whole_loop(self, client):
-        body = client.post("/api/assistant", json={
+        proposed = client.post("/api/assistant", json={
             "message": "sort it out end to end", "role": "safety"}).json()
+        assert proposed["requires_confirmation"] is True
+        assert proposed["plan"]["risk"] == "broad change"
+        assert client.get("/api/patients").json()["count"] == 0
+
+        body = client.post("/api/assistant", json={
+            "message": "yes", "role": "safety"}).json()
         assert body["action"] == "fix_everything"
         assert len(body["steps"]) >= 4
         assert body["ui"]["recovered"] is True
         assert "residual harm" in body["reply"].lower()
         assert client.get("/api/patients").json()["count"] > 0
+
+    def test_reset_requires_confirmation(self, client):
+        client.post("/api/assistant", json={
+            "message": "we registered the wrong patient", "role": "safety"})
+        proposed = client.post("/api/assistant", json={
+            "message": "reset everything", "role": "safety"}).json()
+        assert proposed["requires_confirmation"] is True
+        assert proposed["plan"]["risk"] == "destructive"
+        assert len(client.get("/api/incidents").json()["incidents"]) == 1
+
+        client.post("/api/assistant", json={"message": "yes", "role": "safety"})
+        assert len(client.get("/api/incidents").json()["incidents"]) == 0
+
+    def test_confirmation_is_scoped_to_one_session(self, client):
+        client.post("/api/assistant", json={
+            "message": "we registered the wrong patient", "role": "safety",
+            "session_id": "operator-a"})
+        proposed = client.post("/api/assistant", json={
+            "message": "run recovery", "role": "safety",
+            "session_id": "operator-a"}).json()
+        assert proposed["requires_confirmation"] is True
+
+        unrelated = client.post("/api/assistant", json={
+            "message": "yes", "role": "safety",
+            "session_id": "operator-b"}).json()
+        assert unrelated["action"] == "system_status"
+        assert unrelated["state"]["open_incidents"] == 1
+
+        approved = client.post("/api/assistant", json={
+            "message": "yes", "role": "safety",
+            "session_id": "operator-a"}).json()
+        assert approved["ui"]["recovered"] is True
+
+    def test_confirmation_is_revalidated_after_role_change(self, client):
+        client.post("/api/assistant", json={
+            "message": "we registered the wrong patient", "role": "safety",
+            "session_id": "role-change"})
+        client.post("/api/assistant", json={
+            "message": "run recovery", "role": "safety",
+            "session_id": "role-change"})
+
+        refused = client.post("/api/assistant", json={
+            "message": "yes", "role": "clinician",
+            "session_id": "role-change"}).json()
+        assert refused["action"] == "none"
+        assert "not something the clinician role can do" in refused["reply"]
+        assert refused["state"]["open_incidents"] == 1
 
     def test_state_is_reported_with_every_reply(self, client):
         body = client.post("/api/assistant", json={
