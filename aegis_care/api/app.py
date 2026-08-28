@@ -57,6 +57,10 @@ class AppState:
         self.experiment_status = "idle"
         self.experiment_log: List[str] = []
         self.assistant = Router()
+        # Keep conversational context scoped to one browser session.  The
+        # default router preserves backwards compatibility for API clients
+        # that have not adopted session ids yet.
+        self.assistant_sessions: Dict[str, Router] = {"default": self.assistant}
         self.experiment_runner: Optional[ExperimentRunner] = None
         self.experiment_error: Optional[str] = None
         self.experiment_started_at: Optional[float] = None
@@ -68,6 +72,22 @@ class AppState:
         self.recoveries.clear()
         self.snapshots.clear()
         self.masks.clear()
+        self.assistant = Router()
+        self.assistant_sessions = {"default": self.assistant}
+
+    def assistant_for(self, session_id: str) -> Router:
+        """Return isolated assistant context for one browser session."""
+        key = re.sub(r"[^A-Za-z0-9_.:-]", "", session_id or "default")[:96]
+        key = key or "default"
+        if key not in self.assistant_sessions:
+            # This prototype has no durable user store yet, so bound the
+            # in-process session cache rather than letting abandoned tabs grow
+            # it forever.
+            if len(self.assistant_sessions) >= 64:
+                oldest = next(k for k in self.assistant_sessions if k != "default")
+                self.assistant_sessions.pop(oldest, None)
+            self.assistant_sessions[key] = Router()
+        return self.assistant_sessions[key]
 
 
 state = AppState()
@@ -833,6 +853,8 @@ class AssistantRequest(BaseModel):
     message: str = Field(..., max_length=600)
     role: str = Field("researcher",
                       description="clinician | safety | compliance | researcher")
+    session_id: str = Field("default", max_length=96,
+                            description="Browser-scoped assistant session")
 
 
 def _resolve_patient_token(env: Any, needle: str) -> Optional[str]:
@@ -988,8 +1010,61 @@ def _explain_state(topic: str, role: str, live: Dict[str, Any]) -> str:
 
 
 @app.get("/api/assistant/status")
-def assistant_status() -> Dict[str, Any]:
-    return state.assistant.budget.to_dict()
+def assistant_status(session_id: str = "default") -> Dict[str, Any]:
+    return state.assistant_for(session_id).budget.to_dict()
+
+
+def _confirmation_plan(action: str, params: Dict[str, Any],
+                       live: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Describe consequential work before the assistant is allowed to run it."""
+    if action == "run_recovery":
+        incident_id = live.get("open_incident_id")
+        if not incident_id:
+            return None
+        return {
+            "title": "Contain the open incident",
+            "summary": ("AEGIS will identify causal descendants, rebuild only the "
+                        "confirmed records, and prevent withdrawn versions returning."),
+            "risk": "controlled change",
+            "scope": f"Incident {incident_id}",
+            "steps": [
+                "Find candidate descendants from lineage and scoped fingerprints",
+                "Prove influence with local counterfactual replay",
+                "Rebuild confirmed records or hold uncertain ones for a person",
+                "Withdraw affected versions and verify that they cannot return",
+            ],
+        }
+    if action == "fix_everything":
+        family = normalise_param("family", params.get("family")) or "F1"
+        provenance = normalise_param("provenance", params.get("provenance")) or "targeted"
+        return {
+            "title": "Run an end-to-end simulated recovery",
+            "summary": ("AEGIS will create a synthetic incident and execute the full "
+                        "containment loop without pausing between stages."),
+            "risk": "broad change",
+            "scope": f"{family} incident · {provenance} provenance · depth 4",
+            "steps": [
+                "Create the synthetic incident and freeze its pre-incident snapshot",
+                "Discover and causally confirm the blast radius",
+                "Rebuild or quarantine every confirmed descendant",
+                "Verify safe resume and issue the recovery certificate",
+            ],
+        }
+    if action == "reset_system":
+        return {
+            "title": "Reset the synthetic workspace",
+            "summary": ("This clears every incident, recovery and review decision in "
+                        "the current sandbox. The operation cannot be undone."),
+            "risk": "destructive",
+            "scope": (f"{live['incidents']} incident(s) · {live['patients']} patient(s) · "
+                      f"{live['queue']} queued decision(s)"),
+            "steps": [
+                "Clear incidents, snapshots and recovery results",
+                "Recreate the deterministic synthetic environment",
+                "Return every role console to its clean initial state",
+            ],
+        }
+    return None
 
 
 def _patient_name_intent(env: Any, message: str, role: str) -> Optional[Dict[str, Any]]:
@@ -1022,8 +1097,9 @@ def _patient_name_intent(env: Any, message: str, role: str) -> Optional[Dict[str
 @app.post("/api/assistant")
 def assistant(req: AssistantRequest) -> Dict[str, Any]:
     """Route one natural-language message to an action and execute it."""
+    router = state.assistant_for(req.session_id)
     routed = (_patient_name_intent(state.env, req.message, req.role)
-              or state.assistant.route(req.message, req.role))
+              or router.route(req.message, req.role))
     action = routed.get("action", "none")
     params = routed.get("params", {})
     env = state.env
@@ -1036,8 +1112,25 @@ def assistant(req: AssistantRequest) -> Dict[str, Any]:
         "source": routed.get("source", "local"),
         "reply": routed.get("reply", ""),
         "ui": {},
-        "budget": state.assistant.budget.to_dict(),
+        "budget": router.budget.to_dict(),
     }
+
+    # Consequential actions are proposed before they are executed.  A direct
+    # request creates a grounded plan; only an explicit yes from the same
+    # browser session re-enters the endpoint with a confirmed source marker.
+    plan = _confirmation_plan(action, params, _live_state())
+    confirmed = "confirmed" in out["source"]
+    if plan is not None and not confirmed:
+        router.offer(action, params, plan["title"])
+        out["requires_confirmation"] = True
+        out["plan"] = plan
+        out["reply"] = f"I have prepared a plan: {plan['title']}. Review its scope before I act."
+        out["suggestions"] = [
+            {"label": "Approve plan", "message": "yes"},
+            {"label": "Cancel", "message": "no"},
+        ]
+        out["state"] = _live_state()
+        return out
 
     try:
         if action == "report_incident":
@@ -1063,8 +1156,7 @@ def assistant(req: AssistantRequest) -> Dict[str, Any]:
                 f"missing. Say 'run the recovery' when you are ready.")
 
         elif action == "run_recovery":
-            incident_id = params.get("incident_id") or (
-                next(reversed(state.incidents)) if state.incidents else None)
+            incident_id = params.get("incident_id") or _live_state().get("open_incident_id")
             if not incident_id:
                 out["reply"] = ("There is no open incident. Tell me what went wrong "
                                 "first - for example 'we registered the wrong patient'.")
@@ -1263,11 +1355,11 @@ def assistant(req: AssistantRequest) -> Dict[str, Any]:
     out["state"] = live_after
     if out["suggestions"]:
         # A standing offer, so a bare "yes" executes the obvious next step.
-        state.assistant.offer_message(out["suggestions"][0]["message"],
-                                      out["suggestions"][0]["label"])
+        router.offer_message(out["suggestions"][0]["message"],
+                             out["suggestions"][0]["label"])
     if out.get("action") == "explain":
-        state.assistant.note_topic(str(params.get("topic") or ""))
-    out["budget"] = state.assistant.budget.to_dict()
+        router.note_topic(str(params.get("topic") or ""))
+    out["budget"] = router.budget.to_dict()
     return out
 
 
