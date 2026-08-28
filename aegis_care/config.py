@@ -7,13 +7,58 @@ Every threshold and weight referenced by the proposal lives here so that the
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
+from typing import Optional
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = PACKAGE_ROOT.parent
 DATA_DIR = PROJECT_ROOT / "data"
-RESULTS_DIR = PROJECT_ROOT / "results"
+
+
+def load_dotenv(path: Optional[Path] = None) -> int:
+    """Load KEY=value pairs from .env into the environment.
+
+    Written out rather than pulled in as a dependency: it is a dozen lines, and
+    the project's "runs offline with no surprises" property is worth more than
+    the convenience. A real environment variable always wins, so `export` and
+    CI secrets override the file rather than the other way round.
+    """
+    path = Path(path or PROJECT_ROOT / ".env")
+    if not path.is_file():
+        return 0
+    loaded = 0
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        if key.startswith("export "):
+            key = key[7:].strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        else:
+            # Strip an unquoted trailing comment. Only " #" counts, so a '#'
+            # inside a secret is preserved.
+            hash_at = value.find(" #")
+            if hash_at != -1:
+                value = value[:hash_at].rstrip()
+        if key and key not in os.environ:
+            os.environ[key] = value
+            loaded += 1
+    return loaded
+
+
+# Loaded at import time so every entry point - CLI, uvicorn, tests - sees it.
+load_dotenv()
+
+# The evidence directory is redirectable so that a test run, a scratch
+# experiment, or a container mount cannot overwrite the committed evidence
+# package in results/. The test suite sets this to a temporary directory.
+RESULTS_DIR = Path(os.environ.get("AEGIS_RESULTS_DIR") or (PROJECT_ROOT / "results"))
 
 
 @dataclass(frozen=True)

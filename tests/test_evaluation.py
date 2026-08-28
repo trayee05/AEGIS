@@ -233,3 +233,35 @@ class TestReport:
         figures = make_figures(results, tmp_path)
         assert figures
         assert all(f.exists() and f.stat().st_size > 0 for f in figures)
+
+
+class TestExperimentPlan:
+    """The cell plan is what makes /api/experiment/status determinate, so it has
+    to agree exactly with what run() actually executes."""
+
+    PARAMS = dict(families=("F1", "F2", "F3", "F4"), depths=(2, 3, 4),
+                  provenance_conditions=("complete", "targeted"), tasks_per_family=1)
+
+    def test_plan_matches_executed_cells(self):
+        planned = ExperimentRunner.plan(**self.PARAMS)
+        runner = ExperimentRunner()
+        runner.run(conditions=("I",), **self.PARAMS)
+        assert runner.total_cells == len(planned)
+        assert runner.completed_cells == len(planned)
+
+    def test_plan_applies_the_seed_depth_filter(self):
+        """F2/F3/F4 seed below depth 0, so shallow depths are infeasible and must
+        not be counted in the denominator of a progress bar."""
+        from aegis_care.incident.scenarios import FAMILY_INFO
+
+        planned = ExperimentRunner.plan(families=("F1", "F2", "F3", "F4"),
+                                        depths=(1, 2, 3, 4),
+                                        provenance_conditions=("complete",),
+                                        tasks_per_family=1)
+        assert planned, "the plan must not be empty"
+        for cell in planned:
+            assert cell["depth"] >= FAMILY_INFO[cell["family"]]["seed_depth"] + 1
+
+    def test_plan_is_empty_when_nothing_is_feasible(self):
+        assert ExperimentRunner.plan(families=("F1",), depths=(),
+                                     provenance_conditions=("complete",)) == []

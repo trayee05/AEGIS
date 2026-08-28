@@ -212,3 +212,114 @@ class TestExperimentEndpoint:
             "provenance_conditions": ["complete"], "tasks_per_family": 1})
         text = client.get("/api/experiment/report").text
         assert "AEGIS-Care experimental report" in text
+
+
+class TestEvidenceDirectoryIsolation:
+    """A plain `pytest -q` must never overwrite the committed evidence package.
+
+    POST /api/experiment writes tables, figures, and the report to
+    config.RESULTS_DIR. conftest redirects that to a temporary directory before
+    aegis_care is imported; this asserts the redirect is actually in force.
+    """
+
+    def test_results_dir_is_redirected_away_from_the_repo(self):
+        from aegis_care.config import PROJECT_ROOT, RESULTS_DIR
+
+        assert RESULTS_DIR != PROJECT_ROOT / "results"
+        assert PROJECT_ROOT not in RESULTS_DIR.parents
+
+    def test_experiment_writes_only_to_the_redirected_dir(self, client, results_tmp_dir):
+        from pathlib import Path
+
+        committed = Path(__file__).resolve().parent.parent / "results" / "results.json"
+        before = committed.read_bytes() if committed.exists() else None
+
+        body = client.post("/api/experiment", json={
+            "families": ["F1"], "depths": [4],
+            "provenance_conditions": ["complete"], "tasks_per_family": 1}).json()
+        assert body["status"] == "complete"
+
+        assert (Path(results_tmp_dir) / "results.json").exists()
+        if before is not None:
+            assert committed.read_bytes() == before, \
+                "the test suite overwrote the committed evidence package"
+
+
+class TestExperimentStatus:
+    def test_status_is_idle_and_determinate_before_any_run(self, client):
+        body = client.get("/api/experiment/status").json()
+        assert body["status"] in {"idle", "complete", "failed"}
+        assert body["total_cells"] >= 0
+        assert 0.0 <= body["fraction"] <= 1.0
+
+    def test_status_reports_progress_fields_after_a_run(self, client):
+        client.post("/api/experiment", json={
+            "families": ["F1"], "depths": [4],
+            "provenance_conditions": ["complete"], "tasks_per_family": 1})
+        body = client.get("/api/experiment/status").json()
+        assert body["status"] == "complete"
+        assert body["has_results"] is True
+        assert body["error"] is None
+        assert body["elapsed_seconds"] >= 0
+        assert any("planned" in line for line in body["log"])
+
+
+class TestPatientView:
+    """The record-shaped surface the clinician role is built on."""
+
+    def test_lists_patients_with_a_plain_language_status(self, client, incident):
+        body = client.get("/api/patients").json()
+        assert body["count"] > 0
+        for row in body["patients"]:
+            assert row["status"] in {"attention", "checking", "corrected",
+                                     "withdrawn", "clear"}
+            assert row["headline"]
+            assert row["patient"]["name"]
+            assert row["records"] >= 1
+
+    def test_record_detail_reports_a_summary(self, client, incident):
+        token = client.get("/api/patients").json()["patients"][0]["token"]
+        body = client.get(f"/api/patients/{token}/record").json()
+        assert body["patient"]["id"] == token
+        assert body["records"]
+        assert set(body["summary"]) == {"total", "in_use", "corrected", "held", "withdrawn"}
+
+    def test_unknown_patient_is_404(self, client):
+        assert client.get("/api/patients/NOPE/record").status_code == 404
+
+    def test_repair_produces_a_before_and_after(self, client, incident):
+        client.post("/api/recover", json={"incident_id": incident["incident_id"]})
+        patients = client.get("/api/patients").json()["patients"]
+        corrected = [p for p in patients if p["repaired"]]
+        assert corrected, "recovery should leave at least one corrected patient"
+
+        body = client.get(f"/api/patients/{corrected[0]['token']}/record").json()
+        assert body["changes"], "a corrected patient must expose what changed"
+        change = body["changes"][0]
+        assert change["before"] != change["after"]
+        assert change["to_version"] > change["from_version"]
+
+    def test_wrong_patient_repair_is_reported_as_refiled(self, client, incident):
+        """A wrong-patient incident files records under the WRONG patient, so the
+        repaired version sits under a different scope than the one it replaced.
+        The clinician has to be told that, not just shown new text."""
+        client.post("/api/recover", json={"incident_id": incident["incident_id"]})
+        patients = client.get("/api/patients").json()["patients"]
+        corrected = [p for p in patients if p["repaired"]]
+        body = client.get(f"/api/patients/{corrected[0]['token']}/record").json()
+        refiled = [c for c in body["changes"] if c["refiled"]]
+        assert refiled, "an F1 repair must be reported as re-filed"
+        assert refiled[0]["previously_filed_under"] != body["patient"]["id"]
+
+    def test_withdrawn_only_patient_is_not_reported_as_clear(self, client, incident):
+        """The patient the records were WRONGLY filed under keeps only withdrawn
+        versions. Calling that 'No issues found' would hide from a clinician that
+        entries were filed against their patient in error."""
+        client.post("/api/recover", json={"incident_id": incident["incident_id"]})
+        patients = client.get("/api/patients").json()["patients"]
+        withdrawn_only = [p for p in patients
+                          if p["withdrawn"] and not p["active"] and not p["repaired"]]
+        if not withdrawn_only:
+            pytest.skip("this incident left no withdrawn-only patient")
+        assert withdrawn_only[0]["status"] == "withdrawn"
+        assert "removed" in withdrawn_only[0]["headline"].lower()

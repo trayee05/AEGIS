@@ -2,7 +2,27 @@
 building the FHIR sandbox and running trajectories dominates test time."""
 from __future__ import annotations
 
+import atexit
+import os
+import shutil
+import tempfile
 import warnings
+
+# MUST run before any aegis_care import: config.RESULTS_DIR is resolved at
+# import time, and the API writes tables, figures, and the report to it on
+# every POST /api/experiment. Without this redirect a plain `pytest -q`
+# overwrites the committed evidence package in results/ with whatever tiny
+# matrix the API test happened to request.
+_RESULTS_TMP = tempfile.mkdtemp(prefix="aegis-test-results-")
+os.environ["AEGIS_RESULTS_DIR"] = _RESULTS_TMP
+atexit.register(shutil.rmtree, _RESULTS_TMP, True)
+
+# Running the test suite must never cost money. The assistant's odd-input and
+# robustness tests deliberately send text the local matcher cannot place, which
+# is exactly the input that would otherwise be billed to a live API key. Force
+# the model budget to zero before aegis_care is imported, so routing degrades to
+# "ask me to rephrase" instead of calling out.
+os.environ["AEGIS_ASSISTANT_MAX_CALLS"] = "0"
 
 import pytest
 
@@ -11,6 +31,12 @@ from aegis_care.environment import AegisEnvironment
 from aegis_care.incident.scenarios import ScenarioBuilder
 
 warnings.filterwarnings("ignore")
+
+
+@pytest.fixture(scope="session")
+def results_tmp_dir() -> str:
+    """Where the suite is allowed to write evidence artifacts."""
+    return _RESULTS_TMP
 
 
 @pytest.fixture

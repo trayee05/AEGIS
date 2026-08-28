@@ -114,3 +114,60 @@ def test_evidence_manifest_detects_tampering(tmp_path):
     verification = verify_evidence_manifest(manifest)
     assert not verification["valid"]
     assert verification["failures"][0]["reason"] == "sha256 mismatch"
+
+
+class TestSealPortability:
+    """The committed seal must verify on any platform.
+
+    .gitattributes normalises text artifacts to LF, so a manifest that hashed
+    raw bytes on a CRLF machine could never re-verify after a clone -- which is
+    exactly the failure this guards against.
+    """
+
+    def test_committed_manifest_verifies(self):
+        from pathlib import Path
+
+        from aegis_care.eval.evidence import verify_evidence_manifest
+
+        manifest = (Path(__file__).resolve().parent.parent
+                    / "results" / "external_validation" / "evidence_manifest.json")
+        if not manifest.is_file():
+            import pytest
+            pytest.skip("no committed external-validation package in this checkout")
+        result = verify_evidence_manifest(manifest)
+        assert result["valid"], f"integrity seal broken: {result['failures']}"
+        assert result["artifacts_checked"] > 0
+
+    def test_text_digest_is_line_ending_independent(self, tmp_path):
+        from aegis_care.eval.evidence import sha256_file
+
+        lf = tmp_path / "a.md"
+        crlf = tmp_path / "b.md"
+        lf.write_bytes(b"# title\n\nrow one\nrow two\n")
+        crlf.write_bytes(b"# title\r\n\r\nrow one\r\nrow two\r\n")
+        assert sha256_file(lf) == sha256_file(crlf)
+
+    def test_binary_digest_is_exact(self, tmp_path):
+        import hashlib
+
+        from aegis_care.eval.evidence import sha256_file
+
+        blob = tmp_path / "fig.png"
+        payload = b"\x89PNG\r\n\x1a\n" + bytes(range(256))
+        blob.write_bytes(payload)
+        # A binary artifact must never be newline-normalised.
+        assert sha256_file(blob) == hashlib.sha256(payload).hexdigest()
+
+    def test_manifest_records_its_hash_method(self, tmp_path):
+        from aegis_care.eval.evidence import write_evidence_manifest
+
+        artifact = tmp_path / "report.md"
+        artifact.write_text("body\n", encoding="utf-8")
+        path = write_evidence_manifest(
+            tmp_path, results={"rows": [], "incidents": []}, data_source={},
+            evidence_files=[artifact], command="test")
+        import json
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        assert manifest["schema"] == "aegis-evidence-manifest/v2"
+        assert manifest["hash_method"]["algorithm"] == "sha256"
+        assert manifest["artifacts"]["report.md"]["hash_input"] == "newline-normalised"

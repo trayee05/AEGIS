@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import threading
+import time
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -22,6 +24,8 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from ..assistant import Router
+from ..assistant.intents import normalise_param
 from ..care.coordinator import CAREOptions, RecoveryCoordinator
 from ..config import CONFIG, PROJECT_ROOT, RESULTS_DIR
 from ..environment import AegisEnvironment
@@ -52,6 +56,10 @@ class AppState:
         self.experiment: Optional[Dict[str, Any]] = None
         self.experiment_status = "idle"
         self.experiment_log: List[str] = []
+        self.assistant = Router()
+        self.experiment_runner: Optional[ExperimentRunner] = None
+        self.experiment_error: Optional[str] = None
+        self.experiment_started_at: Optional[float] = None
 
     def reset(self) -> None:
         self.env = AegisEnvironment()
@@ -277,6 +285,167 @@ def memory_graph(memory_key: str) -> Dict[str, Any]:
         if (parent, child) not in observed:
             edges.append({"from": parent, "to": child, "observed": False})
     return {"nodes": nodes, "edges": edges}
+
+
+# ======================================================================
+# Patient-centric view
+#
+# The role-separated console needs a record-shaped surface, not a memory-graph
+# one: a nurse asks "can I trust what the assistant told me about this
+# patient", which is a question about one patient's records and their current
+# trust state. These endpoints roll the vaults up per patient. They are
+# clinical-content endpoints, so they are only ever served to a clinical role -
+# the coordinator persona must not reach them.
+# ======================================================================
+TRUST_ORDER = {"quarantined": 0, "suspected": 1, "repaired": 2,
+               "superseded": 3, "tombstoned": 4, "active": 5}
+
+
+def _patient_display(env: Any, patient_id: str) -> Dict[str, Any]:
+    """Name and MRN for a patient token, or a graceful placeholder."""
+    resource = env.fhir.read("Patient", patient_id)
+    if not resource:
+        return {"id": patient_id, "name": patient_id, "mrn": None, "birth_date": None}
+    name = (resource.get("name") or [{}])[0]
+    given = " ".join(name.get("given") or [])
+    identifiers = resource.get("identifier") or [{}]
+    return {
+        "id": patient_id,
+        "name": f"{given} {name.get('family', '')}".strip() or patient_id,
+        "mrn": identifiers[0].get("value"),
+        "birth_date": resource.get("birthDate"),
+    }
+
+
+def _record_rows(env: Any, patient_id: str) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for artifact in env.all_artifacts():
+        if artifact.patient_scope != patient_id:
+            continue
+        rows.append({
+            "key": artifact.key,
+            "memory_id": artifact.memory_id,
+            "version": artifact.version,
+            "owner": artifact.owner.value,
+            "artifact_type": artifact.artifact_type.value,
+            "state": artifact.state.value,
+            "servable": artifact.is_servable(),
+            "created_at": artifact.created_at,
+            "purpose": artifact.purpose,
+            "quarantine_reason": artifact.quarantine_reason,
+            "content": artifact.content,
+        })
+    rows.sort(key=lambda r: (TRUST_ORDER.get(r["state"], 9), r["memory_id"], r["version"]))
+    return rows
+
+
+@app.get("/api/patients")
+def list_patients(only_with_memory: bool = True) -> Dict[str, Any]:
+    """Patients that the agent holds memory about, with a per-patient trust roll-up."""
+    env = state.env
+    buckets: Dict[str, Dict[str, Any]] = {}
+    for artifact in env.all_artifacts():
+        token = artifact.patient_scope
+        if not token:
+            continue
+        bucket = buckets.setdefault(token, {
+            "patient": _patient_display(env, token),
+            "records": 0, "active": 0, "repaired": 0,
+            "quarantined": 0, "withdrawn": 0, "under_review": 0,
+        })
+        bucket["records"] += 1
+        s = artifact.state.value
+        if s == "active":
+            bucket["active"] += 1
+        elif s == "repaired":
+            bucket["repaired"] += 1
+        elif s == "quarantined":
+            bucket["quarantined"] += 1
+        elif s in ("superseded", "tombstoned"):
+            bucket["withdrawn"] += 1
+        elif s == "suspected":
+            bucket["under_review"] += 1
+
+    out = []
+    for token, bucket in buckets.items():
+        # One plain-language status per patient - this is what a nurse reads.
+        # A patient whose only remaining records were withdrawn is NOT "no
+        # issues": entries were wrongly filed against them and then removed,
+        # and the clinician needs to know that happened.
+        live = bucket["active"] + bucket["repaired"]
+        if bucket["quarantined"]:
+            status, headline = "attention", "Held for review"
+        elif bucket["under_review"]:
+            status, headline = "checking", "Being checked"
+        elif bucket["repaired"]:
+            status, headline = "corrected", "Corrected and safe to use"
+        elif bucket["withdrawn"] and not live:
+            status, headline = "withdrawn", "Incorrect entries removed"
+        else:
+            status, headline = "clear", "No issues found"
+        out.append({**bucket, "token": token, "status": status, "headline": headline})
+
+    order = {"attention": 0, "checking": 1, "corrected": 2, "withdrawn": 3, "clear": 4}
+    out.sort(key=lambda r: (order[r["status"]], r["patient"]["name"]))
+    return {"count": len(out), "patients": out}
+
+
+@app.get("/api/patients/{patient_id}/record")
+def patient_record(patient_id: str) -> Dict[str, Any]:
+    """One patient's records, newest state first, with what changed and why.
+
+    `changes` pairs each repaired record with the version it replaced so the
+    interface can show a real before/after rather than asserting a correction.
+    """
+    env = state.env
+    rows = _record_rows(env, patient_id)
+    if not rows:
+        raise HTTPException(404, f"no memory held about patient {patient_id}")
+
+    # A wrong-patient incident files a record under the WRONG patient, so the
+    # repaired version and the version it replaced sit under different patient
+    # scopes. Predecessors are therefore looked up across every vault by
+    # memory_id, and the change reports which patient the record used to be
+    # filed under - which is the fact a clinician actually needs.
+    all_versions: Dict[str, List[Any]] = {}
+    for artifact in env.all_artifacts():
+        all_versions.setdefault(artifact.memory_id, []).append(artifact)
+
+    changes = []
+    for row in rows:
+        if row["state"] != "repaired":
+            continue
+        siblings = sorted(all_versions.get(row["memory_id"], []), key=lambda a: a.version)
+        previous = next((a for a in reversed(siblings) if a.version < row["version"]), None)
+        if previous is None:
+            continue
+        changes.append({
+            "memory_id": row["memory_id"],
+            "artifact_type": row["artifact_type"],
+            "owner": row["owner"],
+            "from_version": previous.version,
+            "to_version": row["version"],
+            "before": previous.content,
+            "after": row["content"],
+            "previously_filed_under": previous.patient_scope,
+            "refiled": previous.patient_scope != patient_id,
+            "rebuilt_at": row["created_at"],
+        })
+
+    held = [r for r in rows if r["state"] == "quarantined"]
+    return {
+        "patient": _patient_display(env, patient_id),
+        "records": rows,
+        "changes": changes,
+        "held_for_review": held,
+        "summary": {
+            "total": len(rows),
+            "in_use": sum(1 for r in rows if r["servable"]),
+            "corrected": len(changes),
+            "held": len(held),
+            "withdrawn": sum(1 for r in rows if r["state"] in ("superseded", "tombstoned")),
+        },
+    }
 
 
 # ======================================================================
@@ -562,12 +731,22 @@ async def run_experiment(req: ExperimentRequest) -> Dict[str, Any]:
 
     state.experiment_status = "running"
     state.experiment_log = []
+    state.experiment_error = None
+    state.experiment_started_at = time.time()
 
     def progress(message: str) -> None:
         state.experiment_log.append(message)
 
+    runner = ExperimentRunner(progress=progress)
+    # Published before the first cell runs so /api/experiment/status can report a
+    # determinate completed/total from the very first poll.
+    runner.total_cells = len(ExperimentRunner.plan(
+        families=tuple(req.families), depths=tuple(req.depths),
+        provenance_conditions=tuple(req.provenance_conditions),
+        tasks_per_family=req.tasks_per_family))
+    state.experiment_runner = runner
+
     def work() -> Dict[str, Any]:
-        runner = ExperimentRunner(progress=progress)
         return runner.run(
             families=tuple(req.families), depths=tuple(req.depths),
             provenance_conditions=tuple(req.provenance_conditions),
@@ -578,7 +757,10 @@ async def run_experiment(req: ExperimentRequest) -> Dict[str, Any]:
         results = await asyncio.to_thread(work)
     except Exception as exc:
         state.experiment_status = "failed"
+        state.experiment_error = str(exc)
         raise HTTPException(500, f"experiment failed: {exc}")
+    finally:
+        state.experiment_runner = None
 
     state.experiment = results
     state.experiment_status = "complete"
@@ -600,8 +782,20 @@ async def run_experiment(req: ExperimentRequest) -> Dict[str, Any]:
 
 @app.get("/api/experiment/status")
 def experiment_status() -> Dict[str, Any]:
+    runner = state.experiment_runner
+    total = runner.total_cells if runner else 0
+    completed = runner.completed_cells if runner else 0
+    if state.experiment_status == "complete" and total == 0:
+        total = completed = len(state.experiment["incidents"]) if state.experiment else 0
+    elapsed = (round(time.time() - state.experiment_started_at, 1)
+               if state.experiment_started_at else 0.0)
     return {"status": state.experiment_status,
             "log": state.experiment_log[-50:],
+            "completed_cells": completed,
+            "total_cells": total,
+            "fraction": round(completed / total, 4) if total else 0.0,
+            "elapsed_seconds": elapsed,
+            "error": state.experiment_error,
             "has_results": state.experiment is not None}
 
 
@@ -623,6 +817,458 @@ def experiment_report() -> str:
         privacy = PrivacyAuditor(state.env).full_audit(
             incident, state.recoveries[incident_id].capsules)
     return build_report(state.experiment, privacy=privacy)
+
+
+
+
+# ======================================================================
+# Assistant
+#
+# The model chooses an action; this endpoint executes it against the real
+# environment and returns real results. No clinical value, metric, or chart
+# datum is ever taken from a model response - the worst a bad routing decision
+# can do is open the wrong screen.
+# ======================================================================
+class AssistantRequest(BaseModel):
+    message: str = Field(..., max_length=600)
+    role: str = Field("researcher",
+                      description="clinician | safety | compliance | researcher")
+
+
+def _resolve_patient_token(env: Any, needle: str) -> Optional[str]:
+    """Match a free-text patient reference to a token we actually hold."""
+    if not needle:
+        return None
+    probe = needle.strip().lower().replace(" ", "")
+    tokens = {a.patient_scope for a in env.all_artifacts() if a.patient_scope}
+    for token in tokens:
+        display = _patient_display(env, token)
+        if probe == token.lower():
+            return token
+        if display["mrn"] and probe == str(display["mrn"]).lower():
+            return token
+    # Fall back to a name substring, longest match wins.
+    best, best_len = None, 0
+    words = [w for w in re.split(r"[^a-z0-9]+", needle.lower()) if len(w) > 2]
+    for token in tokens:
+        name = _patient_display(env, token)["name"].lower()
+        score = sum(len(w) for w in words if w in name)
+        if score > best_len:
+            best, best_len = token, score
+    return best
+
+
+
+def _live_state() -> Dict[str, Any]:
+    """What is actually true right now. Every assistant answer is built on this."""
+    env = state.env
+    incidents = list(state.incidents.values())
+    recovered = set(state.recoveries)
+    open_incidents = [i for i in incidents if i.incident_id not in recovered]
+    patients = list_patients()["patients"]
+    try:
+        queue = review_queue()["count"]
+    except Exception:
+        queue = 0
+    last = None
+    if state.recoveries:
+        last_id = next(reversed(state.recoveries))
+        result = state.recoveries[last_id]
+        last = {
+            "incident_id": last_id,
+            "safe_resume": bool(getattr(result.certificate, "safe_resume", False)),
+            "repaired": len(result.repaired),
+            "quarantined": len(result.quarantined),
+        }
+    return {
+        "incidents": len(incidents),
+        "open_incidents": len(open_incidents),
+        "open_incident_id": open_incidents[-1].incident_id if open_incidents else None,
+        "recovered": len(recovered),
+        "patients": len(patients),
+        "patients_attention": sum(1 for p in patients if p["status"] == "attention"),
+        "patients_corrected": sum(1 for p in patients if p["status"] == "corrected"),
+        "patients_withdrawn": sum(1 for p in patients if p["status"] == "withdrawn"),
+        "memories": sum(1 for _ in env.all_artifacts()),
+        "queue": queue,
+        "last_recovery": last,
+    }
+
+
+def _suggest(role: str, live: Dict[str, Any]) -> List[Dict[str, str]]:
+    """The next steps worth offering, given what is actually true.
+
+    Every suggestion must be something this role can actually do from here. A
+    clinician staring at an empty console is offered the way forward - switch to
+    the console that can create work - rather than a status query that will keep
+    returning "nothing is open".
+    """
+    out: List[Dict[str, str]] = []
+
+    if live["open_incidents"]:
+        if role in ("safety", "researcher"):
+            out.append({"label": "Run the recovery", "message": "run the recovery"})
+            out.append({"label": "How far did it spread?",
+                        "message": "how far did it spread"})
+        else:
+            out.append({"label": "Take me to the safety console",
+                        "message": "switch to the safety officer role"})
+
+    elif not live["incidents"]:
+        if role in ("safety", "researcher"):
+            out.append({"label": "Do the whole thing for me",
+                        "message": "sort it out end to end"})
+            out.append({"label": "Just report a wrong registration",
+                        "message": "we registered the wrong patient"})
+        else:
+            # A dead end otherwise: these roles cannot create an incident.
+            out.append({"label": "Take me to the safety console",
+                        "message": "switch to the safety officer role"})
+            out.append({"label": "What can this system do?",
+                        "message": "explain the care loop"})
+
+    else:
+        if live["patients_attention"] and role in ("clinician", "researcher"):
+            out.append({"label": "Who needs attention?",
+                        "message": "which patients need attention"})
+        if live["queue"] and role in ("compliance", "researcher"):
+            out.append({"label": "Clear the review queue",
+                        "message": "what is waiting for me"})
+        if live["patients_corrected"]:
+            if role in ("clinician", "researcher"):
+                out.append({"label": "See what changed",
+                            "message": "which patients were corrected"})
+            elif role == "safety":
+                out.append({"label": "See it from the nurse's side",
+                            "message": "switch to the clinician role"})
+        if role in ("compliance", "researcher"):
+            out.append({"label": "Did anything leak?", "message": "did any data leak"})
+        if role in ("safety", "researcher"):
+            out.append({"label": "Report a different kind of error",
+                        "message": "we copied a fact from the wrong chart"})
+        if role == "clinician":
+            out.append({"label": "Was anything shared it shouldn't be?",
+                        "message": "switch to the compliance role"})
+
+    # Never repeat a label; never offer more than fits comfortably.
+    seen, unique = set(), []
+    for item in out:
+        if item["label"] not in seen:
+            seen.add(item["label"])
+            unique.append(item)
+    return unique[:3]
+
+
+def _explain_state(topic: str, role: str, live: Dict[str, Any]) -> str:
+    """Answer 'explain this' from the live console, not from a language model."""
+    from ..assistant.router import GLOSSARY
+
+    probe = (topic or "").strip().lower()
+    for term in sorted(GLOSSARY, key=len, reverse=True):
+        if term and term in probe:
+            return GLOSSARY[term]
+
+    if live["open_incidents"]:
+        return (f"An error has been reported and not yet contained. "
+                f"{live['memories']} stored records exist, and the affected ones are "
+                "still live. The next step is to run the recovery, which finds every "
+                "record that inherited the error, proves which ones really did, and "
+                "rebuilds them from the source records.")
+    if live["last_recovery"]:
+        last = live["last_recovery"]
+        return (f"The last incident was handled: {last['repaired']} record(s) were "
+                f"rebuilt from source data and {last['quarantined']} were held for a "
+                f"person. Safe resume was "
+                f"{'approved' if last['safe_resume'] else 'withheld'}. "
+                f"{live['patients']} patient(s) have records, "
+                f"{live['patients_corrected']} of them corrected.")
+    return ("Nothing has happened in this sandbox yet - no error has been reported, "
+            "so there is nothing to recover and no patient records to review. "
+            "Report an error and I will walk you through what the system does about it.")
+
+
+@app.get("/api/assistant/status")
+def assistant_status() -> Dict[str, Any]:
+    return state.assistant.budget.to_dict()
+
+
+def _patient_name_intent(env: Any, message: str, role: str) -> Optional[Dict[str, Any]]:
+    """Resolve "show me Devraj" locally, by matching against patients we hold.
+
+    Doing this here rather than in the model costs nothing, is exact, and means
+    patient names never have to be sent to an external API to be understood.
+    """
+    if role not in ("clinician", "researcher"):
+        return None
+    words = {w for w in re.split(r"[^A-Za-z0-9]+", message.lower()) if len(w) > 2}
+    if not words:
+        return None
+    for token in {a.patient_scope for a in env.all_artifacts() if a.patient_scope}:
+        display = _patient_display(env, token)
+        if token.lower() in words:
+            return {"action": "show_patient", "params": {"patient": token},
+                    "source": "local", "reply": ""}
+        mrn = str(display["mrn"] or "").lower()
+        if mrn and mrn in words:
+            return {"action": "show_patient", "params": {"patient": token},
+                    "source": "local", "reply": ""}
+        name = display["name"].lower()
+        if any(part in words for part in name.split() if len(part) > 2):
+            return {"action": "show_patient", "params": {"patient": token},
+                    "source": "local", "reply": ""}
+    return None
+
+
+@app.post("/api/assistant")
+def assistant(req: AssistantRequest) -> Dict[str, Any]:
+    """Route one natural-language message to an action and execute it."""
+    routed = (_patient_name_intent(state.env, req.message, req.role)
+              or state.assistant.route(req.message, req.role))
+    action = routed.get("action", "none")
+    params = routed.get("params", {})
+    env = state.env
+
+    # `ui` tells the console what to do; `reply` is what the user reads. Both
+    # are built from real results below, never from the model.
+    out: Dict[str, Any] = {
+        "action": action,
+        "params": params,
+        "source": routed.get("source", "local"),
+        "reply": routed.get("reply", ""),
+        "ui": {},
+        "budget": state.assistant.budget.to_dict(),
+    }
+
+    try:
+        if action == "report_incident":
+            family = params.get("family", "F1")
+            if family not in FAMILIES:
+                family = "F1"
+            provenance = params.get("provenance", "targeted")
+            if provenance not in ProvenanceMask.CONDITIONS:
+                provenance = "targeted"
+            with state.lock:
+                task = env.tasks[0]
+                incident = state.builder.build(family, task, depth=4, n_controls=1)
+                state.incidents[incident.incident_id] = incident
+                state.snapshots[incident.incident_id] = env.snapshot()
+                mask = ProvenanceMask(env, CONFIG.seed).apply(provenance)
+                state.masks[incident.incident_id] = mask
+            out["ui"] = {"role": "safety", "view": "command",
+                         "incident_id": incident.incident_id, "refresh": True}
+            out["reply"] = (
+                f"Logged it as {FAMILY_INFO[family]['name'].lower()}. "
+                f"{len(incident.true_contaminated)} record(s) inherited the error and "
+                f"{mask.edges_removed} of {mask.edges_before} provenance links are "
+                f"missing. Say 'run the recovery' when you are ready.")
+
+        elif action == "run_recovery":
+            incident_id = params.get("incident_id") or (
+                next(reversed(state.incidents)) if state.incidents else None)
+            if not incident_id:
+                out["reply"] = ("There is no open incident. Tell me what went wrong "
+                                "first - for example 'we registered the wrong patient'.")
+            else:
+                result = recover(RecoveryRequest(incident_id=incident_id))
+                metrics = result.get("metrics", {})
+                cert = result.get("certificate", {})
+                out["ui"] = {"role": "safety", "view": "command",
+                             "incident_id": incident_id, "recovered": True,
+                             "refresh": True, "recovery": result}
+                out["reply"] = (
+                    f"{'Contained.' if cert.get('safe_resume') else 'Review required.'} "
+                    f"{len(result['repaired'])} record(s) rebuilt from source data, "
+                    f"{len(result['quarantined'])} held for a person. Residual harm "
+                    f"{metrics.get('rwh', 0):.3f}, untouched state kept "
+                    f"{metrics.get('bsr', 0):.3f}.")
+
+        elif action == "show_blast_radius":
+            if not state.incidents:
+                out["reply"] = "No incident is open yet, so nothing has spread."
+            else:
+                incident_id = next(reversed(state.incidents))
+                incident = state.incidents[incident_id]
+                out["ui"] = {"role": "safety", "view": "command",
+                             "incident_id": incident_id, "focus": "blast"}
+                out["reply"] = (
+                    f"The error reached {len(incident.true_contaminated)} record(s) "
+                    f"across {incident.depth} hop(s). The rings show how far.")
+
+        elif action == "list_patients":
+            data = list_patients()
+            wanted = params.get("filter", "all")
+            rows = data["patients"]
+            if wanted != "all":
+                rows = [r for r in rows if r["status"] == wanted]
+            out["ui"] = {"role": "clinician", "view": "records",
+                         "filter": wanted, "refresh": True}
+            if not data["count"]:
+                out["reply"] = ("The assistant holds no patient records yet. A safety "
+                                "officer needs to report and recover an incident first.")
+            elif not rows:
+                out["reply"] = f"No patients are in the '{wanted}' state right now."
+            else:
+                names = ", ".join(r["patient"]["name"] for r in rows[:4])
+                out["reply"] = (f"{len(rows)} patient(s): {names}"
+                                f"{' and others' if len(rows) > 4 else ''}.")
+
+        elif action == "show_patient":
+            token = _resolve_patient_token(env, str(params.get("patient", "")))
+            if not token:
+                out["reply"] = ("I could not find that patient. Ask me to list "
+                                "patients and pick one by name.")
+            else:
+                record = patient_record(token)
+                summary = record["summary"]
+                out["ui"] = {"role": "clinician", "view": "records", "patient": token}
+                if summary["held"]:
+                    verdict = (f"{summary['held']} record(s) are held for review - do "
+                               "not rely on those yet.")
+                elif summary["corrected"]:
+                    verdict = (f"{summary['corrected']} record(s) were corrected and "
+                               "are safe to use.")
+                elif summary["withdrawn"] and not summary["in_use"]:
+                    verdict = (f"{summary['withdrawn']} entr(y/ies) were filed here in "
+                               "error and have been removed.")
+                else:
+                    verdict = "Nothing about this patient was affected."
+                out["reply"] = f"{record['patient']['name']}: {verdict}"
+
+        elif action == "show_boundary":
+            out["ui"] = {"role": "compliance", "view": "assurance", "panel": "boundary"}
+            out["reply"] = ("Opening the data boundary. Clinical content stays inside "
+                            "each runtime; only 14 metadata fields cross to the "
+                            "coordinator, and none of them can carry a name, note or "
+                            "measured value.")
+
+        elif action == "show_queue":
+            queue = review_queue()
+            out["ui"] = {"role": "compliance", "view": "assurance", "panel": "queue"}
+            out["reply"] = (f"{queue['count']} record(s) are waiting on a human decision."
+                            if queue["count"]
+                            else "Nothing is waiting on you - the queue is empty.")
+
+        elif action == "run_leakage_tests":
+            if not state.recoveries:
+                out["reply"] = ("Run a recovery first - the leakage tests attack the "
+                                "capsules a recovery produces.")
+            else:
+                incident_id = next(reversed(state.recoveries))
+                out["ui"] = {"role": "compliance", "view": "assurance",
+                             "panel": "leakage", "incident_id": incident_id,
+                             "run": True}
+                out["reply"] = "Running the attacks against our own recovery interface."
+
+        elif action == "reset_system":
+            with state.lock:
+                state.reset()
+            out["ui"] = {"refresh": True, "reset": True}
+            out["reply"] = "Cleared. The sandbox is back to a clean state."
+
+        elif action == "switch_role":
+            target = params.get("role")
+            if target not in {"clinician", "safety", "compliance", "researcher"}:
+                out["reply"] = ("Which role - clinician, safety, compliance, or "
+                                "researcher?")
+            else:
+                out["ui"] = {"role": target}
+                out["reply"] = f"Switched to the {target} console."
+
+        elif action == "navigate":
+            view = params.get("view")
+            if view:
+                out["ui"] = {"view": view}
+                out["reply"] = f"Opening {view}."
+            else:
+                out["reply"] = "Which screen would you like?"
+
+        elif action == "system_status":
+            live = _live_state()
+            if not live["incidents"]:
+                out["reply"] = (
+                    "Nothing is open. No error has been reported in this sandbox, so "
+                    "there are no affected records and nothing waiting on a person.")
+            else:
+                bits = []
+                if live["open_incidents"]:
+                    bits.append(f"{live['open_incidents']} incident(s) still open")
+                if live["recovered"]:
+                    bits.append(f"{live['recovered']} contained")
+                if live["patients_attention"]:
+                    bits.append(f"{live['patients_attention']} patient(s) need attention")
+                if live["queue"]:
+                    bits.append(f"{live['queue']} record(s) waiting on a decision")
+                if live["patients_corrected"]:
+                    bits.append(f"{live['patients_corrected']} patient(s) corrected")
+                out["reply"] = (
+                    f"{live['incidents']} incident(s) so far: " + ", ".join(bits) + "."
+                    if bits else f"{live['incidents']} incident(s) recorded, all clear.")
+                if live["open_incident_id"]:
+                    out["ui"] = {"role": "safety", "view": "command",
+                                 "incident_id": live["open_incident_id"]}
+
+        elif action == "fix_everything":
+            # The agentic path: report, contain, and report back in one turn.
+            family = normalise_param("family", params.get("family")) or "F1"
+            provenance = normalise_param("provenance", params.get("provenance")) or "targeted"
+            with state.lock:
+                incident = state.builder.build(family, env.tasks[0], depth=4, n_controls=1)
+                state.incidents[incident.incident_id] = incident
+                state.snapshots[incident.incident_id] = env.snapshot()
+                mask = ProvenanceMask(env, CONFIG.seed).apply(provenance)
+                state.masks[incident.incident_id] = mask
+            result = recover(RecoveryRequest(incident_id=incident.incident_id))
+            metrics = result.get("metrics", {})
+            cert = result.get("certificate", {})
+            out["ui"] = {"role": "safety", "view": "command",
+                         "incident_id": incident.incident_id, "recovered": True,
+                         "refresh": True, "recovery": result}
+            out["steps"] = [
+                f"Logged a {FAMILY_INFO[family]['name'].lower()} incident",
+                f"{len(incident.true_contaminated)} record(s) had inherited the error, "
+                f"with {mask.edges_removed} of {mask.edges_before} provenance links missing",
+                f"Confirmed {len(result['confirmed'])} by replay and cleared "
+                f"{len(result['cleared'])}",
+                f"Rebuilt {len(result['repaired'])} from source records, held "
+                f"{len(result['quarantined'])} for a person",
+                f"Withdrew {result['enforcement']['tombstones']} version(s) and blocked "
+                f"{result['resurrection_probe']['blocked']}/"
+                f"{result['resurrection_probe']['attempts']} return attempts",
+            ]
+            out["reply"] = (
+                f"Done end to end. {'Safe to resume.' if cert.get('safe_resume') else 'Review required.'} "
+                f"Residual harm {metrics.get('rwh', 0):.3f}, untouched state kept "
+                f"{metrics.get('bsr', 0):.3f}. Switch to the clinician view to see it "
+                "from a nurse's side.")
+
+        elif action == "explain":
+            if not out["reply"]:
+                out["reply"] = _explain_state(
+                    str(params.get("topic", "")), req.role, _live_state())
+
+    except HTTPException as exc:
+        out["reply"] = f"That did not work: {exc.detail}"
+    except Exception as exc:                      # never 500 on a chat message
+        out["reply"] = f"That did not work: {exc}"
+
+    # Always offer the next steps that make sense from here. This is what makes
+    # the assistant lead rather than wait, and it keeps the console reachable
+    # for anyone who does not know what to type.
+    live_after = _live_state()
+    # Suggest for the role the user ENDS UP in. After a switch the caller is no
+    # longer in req.role, and offering the previous role's next step would loop
+    # them back to the console they just left.
+    effective_role = out.get("ui", {}).get("role") or req.role
+    out["suggestions"] = _suggest(effective_role, live_after)
+    out["state"] = live_after
+    if out["suggestions"]:
+        # A standing offer, so a bare "yes" executes the obvious next step.
+        state.assistant.offer_message(out["suggestions"][0]["message"],
+                                      out["suggestions"][0]["label"])
+    if out.get("action") == "explain":
+        state.assistant.note_topic(str(params.get("topic") or ""))
+    out["budget"] = state.assistant.budget.to_dict()
+    return out
 
 
 # ======================================================================
