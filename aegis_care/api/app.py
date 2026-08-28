@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import threading
 import time
 from dataclasses import asdict
@@ -23,6 +24,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from ..assistant import Router
 from ..care.coordinator import CAREOptions, RecoveryCoordinator
 from ..config import CONFIG, PROJECT_ROOT, RESULTS_DIR
 from ..environment import AegisEnvironment
@@ -53,6 +55,7 @@ class AppState:
         self.experiment: Optional[Dict[str, Any]] = None
         self.experiment_status = "idle"
         self.experiment_log: List[str] = []
+        self.assistant = Router()
         self.experiment_runner: Optional[ExperimentRunner] = None
         self.experiment_error: Optional[str] = None
         self.experiment_started_at: Optional[float] = None
@@ -813,6 +816,251 @@ def experiment_report() -> str:
         privacy = PrivacyAuditor(state.env).full_audit(
             incident, state.recoveries[incident_id].capsules)
     return build_report(state.experiment, privacy=privacy)
+
+
+
+
+# ======================================================================
+# Assistant
+#
+# The model chooses an action; this endpoint executes it against the real
+# environment and returns real results. No clinical value, metric, or chart
+# datum is ever taken from a model response - the worst a bad routing decision
+# can do is open the wrong screen.
+# ======================================================================
+class AssistantRequest(BaseModel):
+    message: str = Field(..., max_length=600)
+    role: str = Field("researcher",
+                      description="clinician | safety | compliance | researcher")
+
+
+def _resolve_patient_token(env: Any, needle: str) -> Optional[str]:
+    """Match a free-text patient reference to a token we actually hold."""
+    if not needle:
+        return None
+    probe = needle.strip().lower().replace(" ", "")
+    tokens = {a.patient_scope for a in env.all_artifacts() if a.patient_scope}
+    for token in tokens:
+        display = _patient_display(env, token)
+        if probe == token.lower():
+            return token
+        if display["mrn"] and probe == str(display["mrn"]).lower():
+            return token
+    # Fall back to a name substring, longest match wins.
+    best, best_len = None, 0
+    words = [w for w in re.split(r"[^a-z0-9]+", needle.lower()) if len(w) > 2]
+    for token in tokens:
+        name = _patient_display(env, token)["name"].lower()
+        score = sum(len(w) for w in words if w in name)
+        if score > best_len:
+            best, best_len = token, score
+    return best
+
+
+@app.get("/api/assistant/status")
+def assistant_status() -> Dict[str, Any]:
+    return state.assistant.budget.to_dict()
+
+
+def _patient_name_intent(env: Any, message: str, role: str) -> Optional[Dict[str, Any]]:
+    """Resolve "show me Devraj" locally, by matching against patients we hold.
+
+    Doing this here rather than in the model costs nothing, is exact, and means
+    patient names never have to be sent to an external API to be understood.
+    """
+    if role not in ("clinician", "researcher"):
+        return None
+    words = {w for w in re.split(r"[^A-Za-z0-9]+", message.lower()) if len(w) > 2}
+    if not words:
+        return None
+    for token in {a.patient_scope for a in env.all_artifacts() if a.patient_scope}:
+        display = _patient_display(env, token)
+        if token.lower() in words:
+            return {"action": "show_patient", "params": {"patient": token},
+                    "source": "local", "reply": ""}
+        mrn = str(display["mrn"] or "").lower()
+        if mrn and mrn in words:
+            return {"action": "show_patient", "params": {"patient": token},
+                    "source": "local", "reply": ""}
+        name = display["name"].lower()
+        if any(part in words for part in name.split() if len(part) > 2):
+            return {"action": "show_patient", "params": {"patient": token},
+                    "source": "local", "reply": ""}
+    return None
+
+
+@app.post("/api/assistant")
+def assistant(req: AssistantRequest) -> Dict[str, Any]:
+    """Route one natural-language message to an action and execute it."""
+    routed = (_patient_name_intent(state.env, req.message, req.role)
+              or state.assistant.route(req.message, req.role))
+    action = routed.get("action", "none")
+    params = routed.get("params", {})
+    env = state.env
+
+    # `ui` tells the console what to do; `reply` is what the user reads. Both
+    # are built from real results below, never from the model.
+    out: Dict[str, Any] = {
+        "action": action,
+        "params": params,
+        "source": routed.get("source", "local"),
+        "reply": routed.get("reply", ""),
+        "ui": {},
+        "budget": state.assistant.budget.to_dict(),
+    }
+
+    try:
+        if action == "report_incident":
+            family = params.get("family", "F1")
+            if family not in FAMILIES:
+                family = "F1"
+            provenance = params.get("provenance", "targeted")
+            if provenance not in ProvenanceMask.CONDITIONS:
+                provenance = "targeted"
+            with state.lock:
+                task = env.tasks[0]
+                incident = state.builder.build(family, task, depth=4, n_controls=1)
+                state.incidents[incident.incident_id] = incident
+                state.snapshots[incident.incident_id] = env.snapshot()
+                mask = ProvenanceMask(env, CONFIG.seed).apply(provenance)
+                state.masks[incident.incident_id] = mask
+            out["ui"] = {"role": "safety", "view": "command",
+                         "incident_id": incident.incident_id, "refresh": True}
+            out["reply"] = (
+                f"Logged it as {FAMILY_INFO[family]['name'].lower()}. "
+                f"{len(incident.true_contaminated)} record(s) inherited the error and "
+                f"{mask.edges_removed} of {mask.edges_before} provenance links are "
+                f"missing. Say 'run the recovery' when you are ready.")
+
+        elif action == "run_recovery":
+            incident_id = params.get("incident_id") or (
+                next(reversed(state.incidents)) if state.incidents else None)
+            if not incident_id:
+                out["reply"] = ("There is no open incident. Tell me what went wrong "
+                                "first - for example 'we registered the wrong patient'.")
+            else:
+                result = recover(RecoveryRequest(incident_id=incident_id))
+                metrics = result.get("metrics", {})
+                cert = result.get("certificate", {})
+                out["ui"] = {"role": "safety", "view": "command",
+                             "incident_id": incident_id, "recovered": True,
+                             "refresh": True}
+                out["reply"] = (
+                    f"{'Contained.' if cert.get('safe_resume') else 'Review required.'} "
+                    f"{len(result['repaired'])} record(s) rebuilt from source data, "
+                    f"{len(result['quarantined'])} held for a person. Residual harm "
+                    f"{metrics.get('rwh', 0):.3f}, untouched state kept "
+                    f"{metrics.get('bsr', 0):.3f}.")
+
+        elif action == "show_blast_radius":
+            if not state.incidents:
+                out["reply"] = "No incident is open yet, so nothing has spread."
+            else:
+                incident_id = next(reversed(state.incidents))
+                incident = state.incidents[incident_id]
+                out["ui"] = {"role": "safety", "view": "command",
+                             "incident_id": incident_id, "focus": "blast"}
+                out["reply"] = (
+                    f"The error reached {len(incident.true_contaminated)} record(s) "
+                    f"across {incident.depth} hop(s). The rings show how far.")
+
+        elif action == "list_patients":
+            data = list_patients()
+            wanted = params.get("filter", "all")
+            rows = data["patients"]
+            if wanted != "all":
+                rows = [r for r in rows if r["status"] == wanted]
+            out["ui"] = {"role": "clinician", "view": "records",
+                         "filter": wanted, "refresh": True}
+            if not data["count"]:
+                out["reply"] = ("The assistant holds no patient records yet. A safety "
+                                "officer needs to report and recover an incident first.")
+            elif not rows:
+                out["reply"] = f"No patients are in the '{wanted}' state right now."
+            else:
+                names = ", ".join(r["patient"]["name"] for r in rows[:4])
+                out["reply"] = (f"{len(rows)} patient(s): {names}"
+                                f"{' and others' if len(rows) > 4 else ''}.")
+
+        elif action == "show_patient":
+            token = _resolve_patient_token(env, str(params.get("patient", "")))
+            if not token:
+                out["reply"] = ("I could not find that patient. Ask me to list "
+                                "patients and pick one by name.")
+            else:
+                record = patient_record(token)
+                summary = record["summary"]
+                out["ui"] = {"role": "clinician", "view": "records", "patient": token}
+                if summary["held"]:
+                    verdict = (f"{summary['held']} record(s) are held for review - do "
+                               "not rely on those yet.")
+                elif summary["corrected"]:
+                    verdict = (f"{summary['corrected']} record(s) were corrected and "
+                               "are safe to use.")
+                elif summary["withdrawn"] and not summary["in_use"]:
+                    verdict = (f"{summary['withdrawn']} entr(y/ies) were filed here in "
+                               "error and have been removed.")
+                else:
+                    verdict = "Nothing about this patient was affected."
+                out["reply"] = f"{record['patient']['name']}: {verdict}"
+
+        elif action == "show_boundary":
+            out["ui"] = {"role": "compliance", "view": "assurance", "panel": "boundary"}
+            out["reply"] = ("Opening the data boundary. Clinical content stays inside "
+                            "each runtime; only 14 metadata fields cross to the "
+                            "coordinator, and none of them can carry a name, note or "
+                            "measured value.")
+
+        elif action == "show_queue":
+            queue = review_queue()
+            out["ui"] = {"role": "compliance", "view": "assurance", "panel": "queue"}
+            out["reply"] = (f"{queue['count']} record(s) are waiting on a human decision."
+                            if queue["count"]
+                            else "Nothing is waiting on you - the queue is empty.")
+
+        elif action == "run_leakage_tests":
+            if not state.recoveries:
+                out["reply"] = ("Run a recovery first - the leakage tests attack the "
+                                "capsules a recovery produces.")
+            else:
+                incident_id = next(reversed(state.recoveries))
+                out["ui"] = {"role": "compliance", "view": "assurance",
+                             "panel": "leakage", "incident_id": incident_id,
+                             "run": True}
+                out["reply"] = "Running the attacks against our own recovery interface."
+
+        elif action == "reset_system":
+            with state.lock:
+                state.reset()
+            out["ui"] = {"refresh": True, "reset": True}
+            out["reply"] = "Cleared. The sandbox is back to a clean state."
+
+        elif action == "switch_role":
+            target = params.get("role")
+            if target not in {"clinician", "safety", "compliance", "researcher"}:
+                out["reply"] = ("Which role - clinician, safety, compliance, or "
+                                "researcher?")
+            else:
+                out["ui"] = {"role": target}
+                out["reply"] = f"Switched to the {target} console."
+
+        elif action == "navigate":
+            view = params.get("view")
+            if view:
+                out["ui"] = {"view": view}
+                out["reply"] = f"Opening {view}."
+            else:
+                out["reply"] = "Which screen would you like?"
+
+        elif action == "explain":
+            pass   # the router already answered, for free
+
+    except HTTPException as exc:
+        out["reply"] = f"That did not work: {exc.detail}"
+    except Exception as exc:                      # never 500 on a chat message
+        out["reply"] = f"That did not work: {exc}"
+
+    return out
 
 
 # ======================================================================

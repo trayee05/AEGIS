@@ -65,7 +65,7 @@ python -m aegis_care.cli privacy       # empirical leakage attacks on our own in
 python -m aegis_care.cli experiment    # the full paired matrix -> results/
 python -m aegis_care.cli external-validate --fhir synthea_fhir.zip  # external-format proof
 python -m aegis_care.cli serve         # dashboard at http://127.0.0.1:8000
-pytest -q                              # 172 tests
+pytest -q                              # 206 tests
 
 python scripts/check_reproducible.py               # committed results must re-run identically
 python scripts/reseal_evidence.py results/external_validation --dry-run
@@ -350,9 +350,54 @@ spinner.
 
 ---
 
+## The assistant
+
+Every role's console can be driven in plain language. Say *"yes I accidentally
+registered the wrong patient"* and the console logs the incident, opens Incident
+Command, and draws the blast radius; say *"run the recovery"* and it runs the
+CARE loop and reports the measured outcome.
+
+**The model never produces data.** It only chooses one action from a fixed
+catalogue and fills its parameters. Every number the assistant says back is
+computed by the same deterministic API the buttons use, so a hallucinated
+clinical value cannot reach the interface — the worst a bad routing decision can
+do is open the wrong screen. Actions are validated against the caller's role
+after routing, so a model naming an action a role may not take is refused.
+
+### Cost
+
+Routing is layered so that almost nothing reaches the model:
+
+| Layer | Cost | Handles |
+| --- | --- | --- |
+| Response cache | free | repeated phrasings |
+| Local pattern matcher | free | the demonstrated phrasings, and most natural ones |
+| Glossary | free | "what is BSR", "explain DRR", … |
+| Patient-name lookup | free | "show me Devraj", "pull up MRN6100000" |
+| Gemini | ~250–400 in / <60 out tokens | genuinely ambiguous wording only |
+
+The console reports the split live ("83% answered locally · 2/150 model calls
+used"). A session ceiling stops an idle tab from quietly burning quota, and only
+the actions available to the current role are put in the prompt, so it stays
+short.
+
+Resolving patient names locally is deliberate: it is exact, free, and means
+patient names never have to be sent to an external service to be understood.
+
+```bash
+cp .env.example .env      # then add your key
+export GEMINI_API_KEY=...           # or set it in the shell
+export AEGIS_ASSISTANT_MAX_CALLS=0  # disable model routing entirely
+```
+
+Without a key the assistant still works — it answers everything it recognises
+locally and asks you to rephrase otherwise.
+
+---
+
 ## Verification
 
-`pytest -q` runs 172 tests. Beyond ordinary unit coverage, each of the six **core invariants**
+`pytest -q` runs 206 tests. Beyond ordinary unit coverage, each of the six **core invariants**
 of proposal Section 7.1 and each termination/safety property of Section 6.6 has an
 executable check in [`tests/test_invariants.py`](tests/test_invariants.py):
 

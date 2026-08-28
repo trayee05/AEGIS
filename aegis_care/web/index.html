@@ -535,6 +535,36 @@
   </div>
 </div>
 
+<button class="chat-toggle" id="chat-toggle" type="button"
+        aria-expanded="false" aria-controls="chat-panel">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-10.9 6.7L4 19.5l1.4-4.6A7.5 7.5 0 1 1 20 11.5z"/></svg>
+  <span>Ask</span>
+</button>
+
+<section class="chat-panel" id="chat-panel" hidden aria-label="Assistant">
+  <header class="chat-head">
+    <div>
+      <strong>Assistant</strong>
+      <span id="chat-budget">Answering locally</span>
+    </div>
+    <button class="chat-close" id="chat-close" type="button" aria-label="Close assistant">&times;</button>
+  </header>
+  <div class="chat-log" id="chat-log" role="log" aria-live="polite">
+    <div class="chat-msg is-bot">
+      <div class="chat-bubble">Tell me what happened in your own words &mdash; for
+        example &ldquo;we registered the wrong patient&rdquo; &mdash; and I will open
+        the right screen. I can also explain any term on screen.</div>
+      <div class="chat-meta">I choose actions; the console computes every number.</div>
+    </div>
+  </div>
+  <div class="chat-suggestions" id="chat-suggestions"></div>
+  <form class="chat-form" id="chat-form">
+    <input id="chat-input" type="text" autocomplete="off" maxlength="600"
+           placeholder="Describe what happened&hellip;" aria-label="Message the assistant">
+    <button class="btn small" type="submit">Send</button>
+  </form>
+</section>
+
 <div class="toast-stack" id="toast-stack" role="status" aria-live="polite" aria-atomic="false"></div>
 
 <script src="/static/app.js"></script>

@@ -23,3 +23,6 @@ data/
 .DS_Store
 Thumbs.db
 presentation_assets/
+
+# Local environment
+.env

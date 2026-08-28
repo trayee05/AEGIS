@@ -377,6 +377,7 @@ function selectRole(id, { firstRun = false } = {}) {
   buildTabs();
   activateView(r.home, { scroll: false });
   renderRoleSurface();
+  if (document.getElementById("chat-suggestions")) renderSuggestions();
   if (firstRun) startTour(id);
 }
 
@@ -460,6 +461,7 @@ async function boot() {
   await refreshIncidents();
   // Roles come last: the surface a role lands on needs system data to exist.
   initRoles();
+  initChat();
 }
 
 function renderOverview() {
@@ -2458,4 +2460,153 @@ function initTour() {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !$("coach").hidden) endTour();
   });
+}
+
+/* ================= ASSISTANT =================
+ * A chat surface that drives the console. The reply text and every number in
+ * it come from the server, which computed them from the real environment; the
+ * language model only ever chose which action to take. That is why nothing
+ * here can show a hallucinated clinical value.
+ */
+const CHAT = { open: false, busy: false, history: [] };
+
+const CHAT_SUGGESTIONS = {
+  clinician: ["Which patients need attention?", "What changed for Devraj?",
+              "What does 'corrected' mean?"],
+  safety: ["We registered the wrong patient", "Run the recovery",
+           "How far did it spread?"],
+  compliance: ["Did any data leave a runtime?", "What's waiting for me?",
+               "Run the leakage tests"],
+  researcher: ["We registered the wrong patient", "Run the recovery",
+               "What is benign-state retention?"],
+};
+
+function initChat() {
+  $("chat-toggle").addEventListener("click", toggleChat);
+  $("chat-close").addEventListener("click", () => toggleChat(false));
+  $("chat-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    sendChat($("chat-input").value);
+  });
+  $("chat-suggestions").addEventListener("click", (e) => {
+    const chip = e.target.closest("button[data-say]");
+    if (chip) sendChat(chip.dataset.say);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && CHAT.open) toggleChat(false);
+  });
+  renderSuggestions();
+  refreshChatBudget();
+}
+
+function toggleChat(force) {
+  CHAT.open = force === undefined ? !CHAT.open : force;
+  $("chat-panel").hidden = !CHAT.open;
+  $("chat-toggle").setAttribute("aria-expanded", CHAT.open ? "true" : "false");
+  if (CHAT.open) {
+    renderSuggestions();
+    window.setTimeout(() => $("chat-input").focus(), 80);
+  }
+}
+
+function renderSuggestions() {
+  const list = CHAT_SUGGESTIONS[currentRole()] || CHAT_SUGGESTIONS.researcher;
+  $("chat-suggestions").innerHTML = list.map((s) =>
+    `<button type="button" data-say="${esc(s)}">${esc(s)}</button>`).join("");
+}
+
+function chatBubble(text, who, meta) {
+  const row = el("div", `chat-msg is-${who}`);
+  row.innerHTML = `<div class="chat-bubble">${esc(text)}</div>` +
+    (meta ? `<div class="chat-meta">${esc(meta)}</div>` : "");
+  $("chat-log").appendChild(row);
+  $("chat-log").scrollTop = $("chat-log").scrollHeight;
+  return row;
+}
+
+async function sendChat(message) {
+  message = String(message || "").trim();
+  if (!message || CHAT.busy) return;
+  CHAT.busy = true;
+  $("chat-input").value = "";
+  chatBubble(message, "user");
+
+  const thinking = el("div", "chat-msg is-bot");
+  thinking.innerHTML = '<div class="chat-bubble"><span class="chat-dots"><i></i><i></i><i></i></span></div>';
+  $("chat-log").appendChild(thinking);
+  $("chat-log").scrollTop = $("chat-log").scrollHeight;
+
+  try {
+    const r = await api("/api/assistant", {
+      method: "POST",
+      body: JSON.stringify({ message, role: currentRole() }),
+    });
+    thinking.remove();
+    // "local" and "glossary" cost nothing; only "model" spends a token.
+    const badge = r.source.startsWith("model") ? "interpreted by Gemini" : "answered locally";
+    chatBubble(r.reply || "Done.", "bot", badge);
+    await applyChatUi(r.ui || {});
+    if (r.budget) renderChatBudget(r.budget);
+  } catch (e) {
+    thinking.remove();
+    chatBubble(`Something went wrong: ${e.message}`, "bot", "error");
+  } finally {
+    CHAT.busy = false;
+    $("chat-input").focus();
+  }
+}
+
+/* The server tells us where to go; the views then load their own real data. */
+async function applyChatUi(ui) {
+  if (ui.reset) {
+    STATE.commandIncident = null;
+    STATE.commandRecovery = null;
+    STATE.lastRecovery = null;
+    STATE.selectedPatient = null;
+  }
+  if (ui.role && ui.role !== currentRole()) {
+    selectRole(ui.role);
+    renderSuggestions();
+  }
+  if (ui.incident_id) {
+    try {
+      STATE.commandIncident = await api(
+        `/api/incidents/${encodeURIComponent(ui.incident_id)}`);
+      if (ui.recovered) {
+        STATE.commandRecovery = STATE.lastRecovery;
+      } else {
+        STATE.commandRecovery = null;
+      }
+      if (STATE.commandReady) {
+        renderBlastRadius(STATE.commandIncident, STATE.commandRecovery);
+        renderCommandStatus();
+        if (STATE.commandRecovery) renderCommandOutcome(STATE.commandRecovery);
+        $("btn-cmd-recover").disabled = !!STATE.commandRecovery;
+      }
+    } catch (e) { /* the view will reload it */ }
+  }
+  if (ui.view) activateView(ui.view, { scroll: false });
+  if (ui.panel) showAssurancePanel(ui.panel);
+  if (ui.patient) {
+    STATE.selectedPatient = ui.patient;
+    if ($("view-records").classList.contains("active")) await loadPatients();
+  }
+  if (ui.run && $("btn-assurance-privacy")) {
+    if (ui.incident_id) $("as-incident").value = ui.incident_id;
+    runAssurancePrivacy();
+  }
+  if (ui.refresh) await refreshIncidents();
+}
+
+async function refreshChatBudget() {
+  try { renderChatBudget(await api("/api/assistant/status")); }
+  catch (e) { /* status is optional */ }
+}
+
+function renderChatBudget(b) {
+  const total = b.model_calls + b.local_hits;
+  const pct = total ? Math.round(b.free_share * 100) : 100;
+  $("chat-budget").innerHTML = b.configured
+    ? `${pct}% answered locally · ${b.model_calls}/${b.max_calls} model calls used`
+    : `Answering locally · set GEMINI_API_KEY for free-form phrasing`;
 }
