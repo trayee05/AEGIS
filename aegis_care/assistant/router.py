@@ -77,6 +77,21 @@ GLOSSARY: Dict[str, str] = {
 }
 
 
+
+# "yes", "go on", "do it" - a standing offer is what makes the assistant able to
+# propose a next step and then act on a one-word answer.
+CONFIRM = re.compile(
+    r"^\s*(y|ya|yes|yeah|yep|sure|ok|okay|go|go\s+on|go\s+ahead|do\s+it|"
+    r"do\s+that|please\s+do|sounds\s+good|alright|proceed|continue|"
+    r"lets\s+do\s+it|let's\s+do\s+it)\b[\s.!]*$", re.I)
+
+DECLINE = re.compile(r"^\s*(n|no|nope|not\s+now|cancel|nevermind|never\s+mind)\b[\s.!]*$", re.I)
+
+# "explain it", "what does that mean", "tell me more" - refers to the last thing.
+REFERS_BACK = re.compile(
+    r"\b(it|that|this|the\s+same|those|them)\b|^\s*(so\s+)?explain\s*[.!?]*$", re.I)
+
+
 @dataclass
 class Budget:
     """Session spend ceiling for model calls."""
@@ -123,6 +138,13 @@ class Router:
         self.budget = budget or Budget()
         self._cache: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
         self._history: List[str] = []
+        # Conversational context. Without this, "so explain it" and "yes, do
+        # that" have no referent and the assistant answers nothing.
+        self.context: Dict[str, Any] = {
+            "last_action": None,     # what we just did
+            "last_topic": None,      # what we just talked about
+            "offer": None,           # {action, params, label} we proposed
+        }
 
     # ------------------------------------------------------------------
     @staticmethod
@@ -151,6 +173,13 @@ class Router:
             return {"action": "none", "params": {}, "source": "local",
                     "reply": "Tell me what happened, or ask what something means."}
 
+        # Context-dependent input must never be cached or sent to the model:
+        # "yes" means something different every time.
+        contextual = self._resolve_from_context(message, role)
+        if contextual is not None:
+            self._remember(None, contextual)
+            return contextual
+
         key = f"{role}:{self._normalise(message)}"
         if key in self._cache:
             cached = dict(self._cache[key])
@@ -173,11 +202,61 @@ class Router:
         self._remember(key, resolved)
         return resolved
 
+
+    # ------------------------------------------------------------------
+    def _resolve_from_context(self, message: str, role: str) -> Optional[Dict[str, Any]]:
+        """Handle replies that only make sense as part of a conversation."""
+        text = message.strip()
+        offer = self.context.get("offer")
+
+        if DECLINE.match(text):
+            self.context["offer"] = None
+            return {"action": "none", "params": {}, "source": "context",
+                    "reply": "No problem. Tell me when you want to pick it up."}
+
+        if CONFIRM.match(text):
+            if offer and offer.get("message"):
+                # Replay the offered step as if the user had typed it. One level
+                # of recursion only: the replayed message is never a bare "yes".
+                self.context["offer"] = None
+                replayed = self.route(offer["message"], role)
+                replayed["source"] = f"{replayed.get('source', 'local')}+confirmed"
+                return replayed
+            if offer and offer.get("action"):
+                self.context["offer"] = None
+                return {"action": offer["action"],
+                        "params": dict(offer.get("params") or {}),
+                        "source": "context", "reply": ""}
+            return {"action": "system_status", "params": {}, "source": "context",
+                    "reply": ""}
+
+        # "explain it" / "so explain" / "what does that mean" with no new subject.
+        lowered = text.lower()
+        wants_explanation = re.search(
+            r"\b(explain|what\s+does\s+(it|that|this)\s+mean|tell\s+me\s+more|"
+            r"go\s+deeper|elaborate)\b", lowered)
+        if wants_explanation:
+            named = any(term in lowered for term in GLOSSARY)
+            if not named and REFERS_BACK.search(lowered) or (
+                    wants_explanation and len(lowered.split()) <= 3 and not named):
+                topic = self.context.get("last_topic") or self.context.get("last_action")
+                return {"action": "explain", "params": {"topic": topic or "screen"},
+                        "source": "context", "reply": ""}
+        return None
     # ------------------------------------------------------------------
     def _fallback_explain(self, resolved: Dict[str, Any]) -> Dict[str, Any]:
-        """An `explain` with no glossary hit still answers locally, for free."""
-        if resolved.get("action") != "explain" or resolved.get("reply"):
+        """Answer `explain` from the glossary, never from the model.
+
+        The model is prompted to return a one-line confirmation of the action it
+        picked - useful for "opening the queue", useless as an explanation. If
+        that filler were allowed through, "what is the current system state"
+        would answer "I can explain the current system state", which is what it
+        used to do. Explanations are therefore always regenerated here, and an
+        unmatched topic is handed to the API to answer from live state.
+        """
+        if resolved.get("action") != "explain":
             return resolved
+        resolved["reply"] = ""            # discard any model-authored text
         topic = str(resolved.get("params", {}).get("topic", "")).strip()
         for term in sorted(GLOSSARY, key=len, reverse=True):
             if term in topic:
@@ -185,10 +264,8 @@ class Router:
                 resolved["params"]["topic"] = term
                 resolved["source"] = "glossary"
                 return resolved
-        resolved["reply"] = (
-            "I can explain any of: " + ", ".join(sorted(
-                t for t in GLOSSARY if " " not in t or len(t) < 20)[:12]) + ".")
-        resolved["source"] = "glossary"
+        # No glossary hit: the API answers from what is actually on screen.
+        resolved["source"] = "state"
         return resolved
 
     def _route_via_model(self, message: str, role: str) -> Dict[str, Any]:
@@ -253,13 +330,39 @@ class Router:
         return resolved
 
     # ------------------------------------------------------------------
-    def _remember(self, key: str, resolved: Dict[str, Any]) -> None:
-        if resolved.get("action") != "none":
-            self._history.append(resolved["action"])
+    def _remember(self, key: Optional[str], resolved: Dict[str, Any]) -> None:
+        action = resolved.get("action")
+        if action and action != "none":
+            self._history.append(action)
             del self._history[:-4]
-        self._cache[key] = dict(resolved)
-        while len(self._cache) > CACHE_SIZE:
-            self._cache.popitem(last=False)
+            self.context["last_action"] = action
+            topic = (resolved.get("params") or {}).get("topic")
+            if topic:
+                self.context["last_topic"] = topic
+        if key is not None:
+            self._cache[key] = dict(resolved)
+            while len(self._cache) > CACHE_SIZE:
+                self._cache.popitem(last=False)
+
+    def offer(self, action: str, params: Optional[Dict[str, Any]] = None,
+              label: str = "") -> None:
+        """Record a proposed next step so a bare 'yes' can execute it."""
+        self.context["offer"] = {"action": action, "params": params or {},
+                                 "label": label}
+
+    def offer_message(self, message: str, label: str = "") -> None:
+        """Offer a next step by the phrasing that performs it.
+
+        Storing the message rather than the action keeps the offer honest: a
+        confirmation runs exactly the same path as typing it, including role
+        validation, so "yes" can never reach somewhere typing could not.
+        """
+        self.context["offer"] = {"action": None, "params": {},
+                                 "label": label, "message": message}
+
+    def note_topic(self, topic: Optional[str]) -> None:
+        if topic:
+            self.context["last_topic"] = topic
 
 
 __all__ = ["Router", "Budget", "GLOSSARY", "DEFAULT_MAX_CALLS"]

@@ -1459,3 +1459,8 @@ summary { padding: 13px 0; color: var(--text); font-weight: 700; cursor: pointer
   .chat-panel { right: 8px; bottom: 8px; max-height: calc(100vh - 16px); }
   .chat-toggle { right: 12px; bottom: 12px; }
 }
+
+/* Multi-step actions show their working inside the reply. */
+.chat-steps { margin: 9px 0 0; padding-left: 17px; display: grid; gap: 4px; }
+.chat-steps li { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.chat-steps li::marker { color: var(--accent); font-family: var(--mono); font-size: 10px; }

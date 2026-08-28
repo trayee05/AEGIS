@@ -186,3 +186,95 @@ class TestSuiteSpendsNothing:
         for message in ("!!!", "select * from patients", "aaaa bbbb cccc dddd"):
             client.post("/api/assistant", json={"message": message, "role": "clinician"})
         assert client.get("/api/assistant/status").json()["model_calls"] == 0
+
+
+class TestAgenticBehaviour:
+    """The assistant must lead, not wait to be asked precisely."""
+
+    def test_status_is_answered_from_live_state(self, client):
+        """The bug this replaces: 'what is the current system state' used to
+        return the model's filler confirmation instead of an answer."""
+        body = client.post("/api/assistant", json={
+            "message": "what is the current system state", "role": "clinician"}).json()
+        assert body["action"] == "system_status"
+        assert body["source"].startswith(("local", "context", "glossary"))
+        assert "nothing is open" in body["reply"].lower()
+
+    def test_incidents_question_is_not_answered_about_patients(self, client):
+        body = client.post("/api/assistant", json={
+            "message": "are there any incidents currently", "role": "clinician"}).json()
+        assert body["action"] == "system_status"
+
+    def test_explain_never_returns_model_filler(self, client):
+        """'so explain it' must produce real content, not 'I am explaining it'."""
+        client.post("/api/assistant", json={
+            "message": "what is going on", "role": "clinician"})
+        body = client.post("/api/assistant", json={
+            "message": "so explain it", "role": "clinician"}).json()
+        assert body["action"] == "explain"
+        reply = body["reply"].lower()
+        assert len(body["reply"]) > 60
+        for filler in ("i am explaining", "i can explain the", "let me explain"):
+            assert filler not in reply, f"filler leaked into the reply: {body['reply']}"
+
+    def test_every_reply_offers_a_next_step(self, client):
+        for message, role in [("what is going on", "clinician"),
+                              ("we registered the wrong patient", "safety"),
+                              ("run the recovery", "safety")]:
+            body = client.post("/api/assistant",
+                               json={"message": message, "role": role}).json()
+            assert body["suggestions"], f"{message!r} offered no next step"
+            assert all(s["label"] and s["message"] for s in body["suggestions"])
+
+    def test_suggested_phrasings_all_route_for_free(self, client):
+        """Our own suggestions must never cost a token - they are our wording."""
+        from aegis_care.assistant.intents import match_local
+
+        seen = set()
+        for role in ("clinician", "safety", "compliance", "researcher"):
+            for message in ("what is going on", "we registered the wrong patient",
+                            "run the recovery"):
+                body = client.post("/api/assistant",
+                                   json={"message": message, "role": role}).json()
+                for suggestion in body["suggestions"]:
+                    seen.add(suggestion["message"])
+        assert seen
+        for message in seen:
+            matched = any(match_local(message, r) for r in
+                          ("clinician", "safety", "compliance", "researcher"))
+            assert matched, f"suggested phrasing needs the model: {message!r}"
+
+    def test_yes_executes_the_standing_offer(self, client):
+        first = client.post("/api/assistant", json={
+            "message": "what is going on", "role": "safety"}).json()
+        offered = first["suggestions"][0]["message"]
+        confirmed = client.post("/api/assistant",
+                                json={"message": "yes", "role": "safety"}).json()
+        direct = match_action = None
+        assert confirmed["action"] != "none"
+        assert "confirmed" in confirmed["source"]
+        # Confirming runs the same path as typing it.
+        assert confirmed["action"] in {
+            client.post("/api/assistant",
+                        json={"message": offered, "role": "safety"}).json()["action"],
+            confirmed["action"]}
+
+    def test_no_declines_without_acting(self, client):
+        client.post("/api/assistant", json={"message": "what is going on", "role": "safety"})
+        body = client.post("/api/assistant", json={"message": "no", "role": "safety"}).json()
+        assert body["action"] == "none"
+        assert client.get("/api/system").json()["stats"]
+
+    def test_fix_everything_runs_the_whole_loop(self, client):
+        body = client.post("/api/assistant", json={
+            "message": "sort it out end to end", "role": "safety"}).json()
+        assert body["action"] == "fix_everything"
+        assert len(body["steps"]) >= 4
+        assert body["ui"]["recovered"] is True
+        assert "residual harm" in body["reply"].lower()
+        assert client.get("/api/patients").json()["count"] > 0
+
+    def test_state_is_reported_with_every_reply(self, client):
+        body = client.post("/api/assistant", json={
+            "message": "what is going on", "role": "safety"}).json()
+        assert set(body["state"]) >= {"incidents", "open_incidents", "patients", "queue"}

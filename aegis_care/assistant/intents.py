@@ -72,6 +72,43 @@ ACTIONS: Tuple[Action, ...] = (
         keywords=("blast", "radius", "spread", "affected", "impact", "far"),
     ),
     Action(
+        name="system_status",
+        summary="Report what is happening right now: open incidents, affected records, what needs a person.",
+        roles=("any",),
+        patterns=(
+            r"\b(any|are\s+there)\s+(open\s+)?(incidents?|problems?|issues?|errors?)\b",
+            r"\b(current|system)\s+(state|status|situation)\b",
+            r"\bwhat('?s| is)\s+(going\s+on|happening|the\s+(state|status|situation))\b",
+            r"\bwhere\s+(are\s+we|do\s+(we|i)\s+stand)\b",
+            r"\bstatus\b",
+            r"\bcatch\s+me\s+up\b",
+            r"\bbrief\s+me\b",
+            r"\banything\s+(open|active|outstanding)\b",
+        ),
+        keywords=("status", "state", "situation", "incidents", "happening",
+                  "going", "currently", "overview", "summary", "outstanding"),
+    ),
+    Action(
+        name="fix_everything",
+        summary="Handle an incident end to end: report it, run recovery, and report the outcome.",
+        roles=("safety", "researcher"),
+        params={
+            "family": "F1 | F2 | F3 | F4",
+            "provenance": "complete | random20 | random40 | random60 | targeted",
+        },
+        patterns=(
+            r"\b(sort|handle|deal\s+with|take\s+care\s+of|clean\s+up)\b.{0,18}\b(it|this|that|everything|the\s+whole)\b",
+            r"\bsort\s+it\s+out\b",
+            r"\bdo\s+(the\s+)?(whole|everything|all\s+of\s+it)\b",
+            r"\bfix\s+(it\s+)?all\b",
+            r"\bend\s+to\s+end\b",
+            r"\bwalk\s+me\s+through\b",
+            r"\bdemo(nstrate)?\b",
+            r"\bshow\s+me\s+the\s+whole\b",
+        ),
+        keywords=("everything", "whole", "demo", "walkthrough", "showcase"),
+    ),
+    Action(
         name="show_patient",
         summary="Open one patient's records and show what changed.",
         roles=("clinician", "researcher"),
@@ -140,9 +177,13 @@ ACTIONS: Tuple[Action, ...] = (
         roles=("any",),
         params={"role": "clinician | safety | compliance | researcher"},
         patterns=(
-            r"\b(switch|change|log\s*in|sign\s*in|become|act)\s+(to|as|in\s+as)?\s*(a\s+)?"
+            # "switch to the safety officer role", "take me to the nurse console",
+            # "sign in as compliance" - the article and trailing noun are optional.
+            r"\b(switch|change|log\s*in|sign\s*in|become|act|take\s+me)\s+"
+            r"(to|as|in\s+as)?\s*(the\s+|a\s+)?"
             r"(nurse|clinician|doctor|safety|security|compliance|review|research)",
             r"\bi\s+am\s+(a\s+)?(nurse|clinician|doctor|safety|compliance|researcher)\b",
+            r"\b(nurse|clinician|safety|compliance|researcher)\s+(console|view|role|side)\b",
         ),
         keywords=("switch", "role", "nurse", "clinician", "safety", "compliance",
                   "researcher", "login"),
@@ -171,8 +212,10 @@ ACTIONS: Tuple[Action, ...] = (
             r"\bexplain\b",
             r"\bhelp\b",
             r"\bhow\s+does\s+(this|it)\s+work\b",
+            r"\b(tell|say)\s+me\s+more\b",
+            r"\bwhat\s+(should|do)\s+i\s+(do|look\s+at)\b",
         ),
-        keywords=("what", "explain", "mean", "help", "how", "why"),
+        keywords=("what", "explain", "mean", "help", "how", "why", "loop"),
     ),
     Action(
         name="reset_system",

@@ -2497,6 +2497,23 @@ function initChat() {
   });
   renderSuggestions();
   refreshChatBudget();
+  primeChat();
+}
+
+/* Open with what is actually true, not a generic greeting. The assistant should
+ * already know whether anything needs the user before they ask. */
+async function primeChat() {
+  try {
+    const r = await api("/api/assistant", {
+      method: "POST",
+      body: JSON.stringify({ message: "what is going on", role: currentRole() }),
+    });
+    if (r.reply) {
+      chatBubble(r.reply, "bot", "current state");
+      renderChatNext(r.suggestions || []);
+    }
+    if (r.budget) renderChatBudget(r.budget);
+  } catch (e) { /* the static opener already covers this */ }
 }
 
 function toggleChat(force) {
@@ -2504,7 +2521,6 @@ function toggleChat(force) {
   $("chat-panel").hidden = !CHAT.open;
   $("chat-toggle").setAttribute("aria-expanded", CHAT.open ? "true" : "false");
   if (CHAT.open) {
-    renderSuggestions();
     window.setTimeout(() => $("chat-input").focus(), 80);
   }
 }
@@ -2522,6 +2538,23 @@ function chatBubble(text, who, meta) {
   $("chat-log").appendChild(row);
   $("chat-log").scrollTop = $("chat-log").scrollHeight;
   return row;
+}
+
+/* What the assistant actually did, in order. */
+function renderChatSteps(row, steps) {
+  const list = el("ol", "chat-steps");
+  steps.forEach((step) => list.appendChild(el("li", null, esc(step))));
+  row.querySelector(".chat-bubble").appendChild(list);
+  $("chat-log").scrollTop = $("chat-log").scrollHeight;
+}
+
+/* Next steps the server says make sense from here. Replaces the static
+ * suggestion chips once a conversation has started, so the assistant leads. */
+function renderChatNext(suggestions) {
+  const host = $("chat-suggestions");
+  if (!suggestions.length) { renderSuggestions(); return; }
+  host.innerHTML = suggestions.map((s) =>
+    `<button type="button" data-say="${esc(s.message)}">${esc(s.label)}</button>`).join("");
 }
 
 async function sendChat(message) {
@@ -2544,8 +2577,12 @@ async function sendChat(message) {
     thinking.remove();
     // "local" and "glossary" cost nothing; only "model" spends a token.
     const badge = r.source.startsWith("model") ? "interpreted by Gemini" : "answered locally";
-    chatBubble(r.reply || "Done.", "bot", badge);
+    const bubble = chatBubble(r.reply || "Done.", "bot", badge);
+    // A multi-step action shows its working, so the user sees what was done on
+    // their behalf rather than being told it happened.
+    if (r.steps?.length) renderChatSteps(bubble, r.steps);
     await applyChatUi(r.ui || {});
+    renderChatNext(r.suggestions || []);
     if (r.budget) renderChatBudget(r.budget);
   } catch (e) {
     thinking.remove();
@@ -2573,7 +2610,11 @@ async function applyChatUi(ui) {
       STATE.commandIncident = await api(
         `/api/incidents/${encodeURIComponent(ui.incident_id)}`);
       if (ui.recovered) {
-        STATE.commandRecovery = STATE.lastRecovery;
+        // The assistant ran the recovery server-side, so it hands back the same
+        // payload the button would have produced. Without this the field stays
+        // red while the reply says it is contained.
+        STATE.commandRecovery = ui.recovery || STATE.lastRecovery;
+        STATE.lastRecovery = STATE.commandRecovery;
       } else {
         STATE.commandRecovery = null;
       }

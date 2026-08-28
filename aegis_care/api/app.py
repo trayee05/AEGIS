@@ -25,6 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from ..assistant import Router
+from ..assistant.intents import normalise_param
 from ..care.coordinator import CAREOptions, RecoveryCoordinator
 from ..config import CONFIG, PROJECT_ROOT, RESULTS_DIR
 from ..environment import AegisEnvironment
@@ -857,6 +858,135 @@ def _resolve_patient_token(env: Any, needle: str) -> Optional[str]:
     return best
 
 
+
+def _live_state() -> Dict[str, Any]:
+    """What is actually true right now. Every assistant answer is built on this."""
+    env = state.env
+    incidents = list(state.incidents.values())
+    recovered = set(state.recoveries)
+    open_incidents = [i for i in incidents if i.incident_id not in recovered]
+    patients = list_patients()["patients"]
+    try:
+        queue = review_queue()["count"]
+    except Exception:
+        queue = 0
+    last = None
+    if state.recoveries:
+        last_id = next(reversed(state.recoveries))
+        result = state.recoveries[last_id]
+        last = {
+            "incident_id": last_id,
+            "safe_resume": bool(getattr(result.certificate, "safe_resume", False)),
+            "repaired": len(result.repaired),
+            "quarantined": len(result.quarantined),
+        }
+    return {
+        "incidents": len(incidents),
+        "open_incidents": len(open_incidents),
+        "open_incident_id": open_incidents[-1].incident_id if open_incidents else None,
+        "recovered": len(recovered),
+        "patients": len(patients),
+        "patients_attention": sum(1 for p in patients if p["status"] == "attention"),
+        "patients_corrected": sum(1 for p in patients if p["status"] == "corrected"),
+        "patients_withdrawn": sum(1 for p in patients if p["status"] == "withdrawn"),
+        "memories": sum(1 for _ in env.all_artifacts()),
+        "queue": queue,
+        "last_recovery": last,
+    }
+
+
+def _suggest(role: str, live: Dict[str, Any]) -> List[Dict[str, str]]:
+    """The next steps worth offering, given what is actually true.
+
+    Every suggestion must be something this role can actually do from here. A
+    clinician staring at an empty console is offered the way forward - switch to
+    the console that can create work - rather than a status query that will keep
+    returning "nothing is open".
+    """
+    out: List[Dict[str, str]] = []
+
+    if live["open_incidents"]:
+        if role in ("safety", "researcher"):
+            out.append({"label": "Run the recovery", "message": "run the recovery"})
+            out.append({"label": "How far did it spread?",
+                        "message": "how far did it spread"})
+        else:
+            out.append({"label": "Take me to the safety console",
+                        "message": "switch to the safety officer role"})
+
+    elif not live["incidents"]:
+        if role in ("safety", "researcher"):
+            out.append({"label": "Do the whole thing for me",
+                        "message": "sort it out end to end"})
+            out.append({"label": "Just report a wrong registration",
+                        "message": "we registered the wrong patient"})
+        else:
+            # A dead end otherwise: these roles cannot create an incident.
+            out.append({"label": "Take me to the safety console",
+                        "message": "switch to the safety officer role"})
+            out.append({"label": "What can this system do?",
+                        "message": "explain the care loop"})
+
+    else:
+        if live["patients_attention"] and role in ("clinician", "researcher"):
+            out.append({"label": "Who needs attention?",
+                        "message": "which patients need attention"})
+        if live["queue"] and role in ("compliance", "researcher"):
+            out.append({"label": "Clear the review queue",
+                        "message": "what is waiting for me"})
+        if live["patients_corrected"]:
+            if role in ("clinician", "researcher"):
+                out.append({"label": "See what changed",
+                            "message": "which patients were corrected"})
+            elif role == "safety":
+                out.append({"label": "See it from the nurse's side",
+                            "message": "switch to the clinician role"})
+        if role in ("compliance", "researcher"):
+            out.append({"label": "Did anything leak?", "message": "did any data leak"})
+        if role in ("safety", "researcher"):
+            out.append({"label": "Report a different kind of error",
+                        "message": "we copied a fact from the wrong chart"})
+        if role == "clinician":
+            out.append({"label": "Was anything shared it shouldn't be?",
+                        "message": "switch to the compliance role"})
+
+    # Never repeat a label; never offer more than fits comfortably.
+    seen, unique = set(), []
+    for item in out:
+        if item["label"] not in seen:
+            seen.add(item["label"])
+            unique.append(item)
+    return unique[:3]
+
+
+def _explain_state(topic: str, role: str, live: Dict[str, Any]) -> str:
+    """Answer 'explain this' from the live console, not from a language model."""
+    from ..assistant.router import GLOSSARY
+
+    probe = (topic or "").strip().lower()
+    for term in sorted(GLOSSARY, key=len, reverse=True):
+        if term and term in probe:
+            return GLOSSARY[term]
+
+    if live["open_incidents"]:
+        return (f"An error has been reported and not yet contained. "
+                f"{live['memories']} stored records exist, and the affected ones are "
+                "still live. The next step is to run the recovery, which finds every "
+                "record that inherited the error, proves which ones really did, and "
+                "rebuilds them from the source records.")
+    if live["last_recovery"]:
+        last = live["last_recovery"]
+        return (f"The last incident was handled: {last['repaired']} record(s) were "
+                f"rebuilt from source data and {last['quarantined']} were held for a "
+                f"person. Safe resume was "
+                f"{'approved' if last['safe_resume'] else 'withheld'}. "
+                f"{live['patients']} patient(s) have records, "
+                f"{live['patients_corrected']} of them corrected.")
+    return ("Nothing has happened in this sandbox yet - no error has been reported, "
+            "so there is nothing to recover and no patient records to review. "
+            "Report an error and I will walk you through what the system does about it.")
+
+
 @app.get("/api/assistant/status")
 def assistant_status() -> Dict[str, Any]:
     return state.assistant.budget.to_dict()
@@ -944,7 +1074,7 @@ def assistant(req: AssistantRequest) -> Dict[str, Any]:
                 cert = result.get("certificate", {})
                 out["ui"] = {"role": "safety", "view": "command",
                              "incident_id": incident_id, "recovered": True,
-                             "refresh": True}
+                             "refresh": True, "recovery": result}
                 out["reply"] = (
                     f"{'Contained.' if cert.get('safe_resume') else 'Review required.'} "
                     f"{len(result['repaired'])} record(s) rebuilt from source data, "
@@ -1052,14 +1182,92 @@ def assistant(req: AssistantRequest) -> Dict[str, Any]:
             else:
                 out["reply"] = "Which screen would you like?"
 
+        elif action == "system_status":
+            live = _live_state()
+            if not live["incidents"]:
+                out["reply"] = (
+                    "Nothing is open. No error has been reported in this sandbox, so "
+                    "there are no affected records and nothing waiting on a person.")
+            else:
+                bits = []
+                if live["open_incidents"]:
+                    bits.append(f"{live['open_incidents']} incident(s) still open")
+                if live["recovered"]:
+                    bits.append(f"{live['recovered']} contained")
+                if live["patients_attention"]:
+                    bits.append(f"{live['patients_attention']} patient(s) need attention")
+                if live["queue"]:
+                    bits.append(f"{live['queue']} record(s) waiting on a decision")
+                if live["patients_corrected"]:
+                    bits.append(f"{live['patients_corrected']} patient(s) corrected")
+                out["reply"] = (
+                    f"{live['incidents']} incident(s) so far: " + ", ".join(bits) + "."
+                    if bits else f"{live['incidents']} incident(s) recorded, all clear.")
+                if live["open_incident_id"]:
+                    out["ui"] = {"role": "safety", "view": "command",
+                                 "incident_id": live["open_incident_id"]}
+
+        elif action == "fix_everything":
+            # The agentic path: report, contain, and report back in one turn.
+            family = normalise_param("family", params.get("family")) or "F1"
+            provenance = normalise_param("provenance", params.get("provenance")) or "targeted"
+            with state.lock:
+                incident = state.builder.build(family, env.tasks[0], depth=4, n_controls=1)
+                state.incidents[incident.incident_id] = incident
+                state.snapshots[incident.incident_id] = env.snapshot()
+                mask = ProvenanceMask(env, CONFIG.seed).apply(provenance)
+                state.masks[incident.incident_id] = mask
+            result = recover(RecoveryRequest(incident_id=incident.incident_id))
+            metrics = result.get("metrics", {})
+            cert = result.get("certificate", {})
+            out["ui"] = {"role": "safety", "view": "command",
+                         "incident_id": incident.incident_id, "recovered": True,
+                         "refresh": True, "recovery": result}
+            out["steps"] = [
+                f"Logged a {FAMILY_INFO[family]['name'].lower()} incident",
+                f"{len(incident.true_contaminated)} record(s) had inherited the error, "
+                f"with {mask.edges_removed} of {mask.edges_before} provenance links missing",
+                f"Confirmed {len(result['confirmed'])} by replay and cleared "
+                f"{len(result['cleared'])}",
+                f"Rebuilt {len(result['repaired'])} from source records, held "
+                f"{len(result['quarantined'])} for a person",
+                f"Withdrew {result['enforcement']['tombstones']} version(s) and blocked "
+                f"{result['resurrection_probe']['blocked']}/"
+                f"{result['resurrection_probe']['attempts']} return attempts",
+            ]
+            out["reply"] = (
+                f"Done end to end. {'Safe to resume.' if cert.get('safe_resume') else 'Review required.'} "
+                f"Residual harm {metrics.get('rwh', 0):.3f}, untouched state kept "
+                f"{metrics.get('bsr', 0):.3f}. Switch to the clinician view to see it "
+                "from a nurse's side.")
+
         elif action == "explain":
-            pass   # the router already answered, for free
+            if not out["reply"]:
+                out["reply"] = _explain_state(
+                    str(params.get("topic", "")), req.role, _live_state())
 
     except HTTPException as exc:
         out["reply"] = f"That did not work: {exc.detail}"
     except Exception as exc:                      # never 500 on a chat message
         out["reply"] = f"That did not work: {exc}"
 
+    # Always offer the next steps that make sense from here. This is what makes
+    # the assistant lead rather than wait, and it keeps the console reachable
+    # for anyone who does not know what to type.
+    live_after = _live_state()
+    # Suggest for the role the user ENDS UP in. After a switch the caller is no
+    # longer in req.role, and offering the previous role's next step would loop
+    # them back to the console they just left.
+    effective_role = out.get("ui", {}).get("role") or req.role
+    out["suggestions"] = _suggest(effective_role, live_after)
+    out["state"] = live_after
+    if out["suggestions"]:
+        # A standing offer, so a bare "yes" executes the obvious next step.
+        state.assistant.offer_message(out["suggestions"][0]["message"],
+                                      out["suggestions"][0]["label"])
+    if out.get("action") == "explain":
+        state.assistant.note_topic(str(params.get("topic") or ""))
+    out["budget"] = state.assistant.budget.to_dict()
     return out
 
 
