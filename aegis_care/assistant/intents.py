@@ -232,6 +232,36 @@ PROVENANCE_HINTS = (
 )
 
 
+# A model may echo a whole option description ("F1 wrong-patient alias") rather
+# than the bare value. Normalise before anything downstream trusts it, or an
+# F2 report silently becomes an F1 one.
+VALID_VALUES = {
+    "family": ("F1", "F2", "F3", "F4"),
+    "provenance": ("complete", "random20", "random40", "random60", "targeted"),
+    "role": ("clinician", "safety", "compliance", "researcher"),
+    "view": ("records", "command", "assurance", "overview", "incident", "care",
+             "graph", "baselines", "privacy", "evidence", "review", "experiment",
+             "audit"),
+    "filter": ("all", "attention", "checking", "corrected", "withdrawn", "clear"),
+}
+
+
+def normalise_param(key: str, value: Any) -> Any:
+    """Reduce a loose value to a valid one, or drop it."""
+    allowed = VALID_VALUES.get(key)
+    if allowed is None or not isinstance(value, str):
+        return value
+    probe = value.strip().lower()
+    for option in allowed:
+        if probe == option.lower():
+            return option
+    # "F1 wrong-patient alias" -> F1; "nurse / clinician" -> clinician.
+    for option in allowed:
+        if re.search(rf"\b{re.escape(option.lower())}\b", probe):
+            return option
+    return None
+
+
 def _first_hint(text: str, hints: Sequence[Tuple[str, Sequence[str]]]) -> Optional[str]:
     for value, needles in hints:
         if any(n in text for n in needles):
@@ -321,4 +351,4 @@ def extract_params(action_name: str, text: str) -> Dict[str, Any]:
 
 
 __all__ = ["Action", "ACTIONS", "ACTIONS_BY_NAME", "actions_for", "match_local",
-           "extract_params"]
+           "extract_params", "normalise_param", "VALID_VALUES"]

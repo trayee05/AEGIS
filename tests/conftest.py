@@ -17,6 +17,13 @@ _RESULTS_TMP = tempfile.mkdtemp(prefix="aegis-test-results-")
 os.environ["AEGIS_RESULTS_DIR"] = _RESULTS_TMP
 atexit.register(shutil.rmtree, _RESULTS_TMP, True)
 
+# Running the test suite must never cost money. The assistant's odd-input and
+# robustness tests deliberately send text the local matcher cannot place, which
+# is exactly the input that would otherwise be billed to a live API key. Force
+# the model budget to zero before aegis_care is imported, so routing degrades to
+# "ask me to rephrase" instead of calling out.
+os.environ["AEGIS_ASSISTANT_MAX_CALLS"] = "0"
+
 import pytest
 
 from aegis_care.care.coordinator import CAREOptions, RecoveryCoordinator

@@ -24,7 +24,7 @@ import httpx
 
 from .intents import Action
 
-DEFAULT_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+DEFAULT_MODEL = os.environ.get("GEMINI_MODEL", "gemini-flash-lite-latest")
 API_ROOT = "https://generativelanguage.googleapis.com/v1beta/models"
 
 # Output is capped hard: the model returns an action name, a couple of short

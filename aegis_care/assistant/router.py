@@ -14,7 +14,8 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from . import gemini
-from .intents import ACTIONS_BY_NAME, actions_for, extract_params, match_local
+from .intents import (ACTIONS_BY_NAME, actions_for, extract_params, match_local,
+                      normalise_param)
 
 # A session is one server process. The default is generous for a demo and still
 # bounded; set AEGIS_ASSISTANT_MAX_CALLS=0 to disable model routing entirely.
@@ -238,8 +239,13 @@ class Router:
 
         # Keep only parameters this action declares, and backfill from the text.
         declared = set(action.params)
-        params = {k: v for k, v in (resolved.get("params") or {}).items()
-                  if k in declared and v not in (None, "")}
+        params = {}
+        for key, value in (resolved.get("params") or {}).items():
+            if key not in declared or value in (None, ""):
+                continue
+            cleaned = normalise_param(key, value)
+            if cleaned not in (None, ""):
+                params[key] = cleaned
         for key, value in extract_params(name, " " + message.lower() + " ").items():
             params.setdefault(key, value)
         resolved["params"] = params

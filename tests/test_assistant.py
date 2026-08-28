@@ -169,3 +169,20 @@ class TestAssistantEndpoint:
             response = client.post("/api/assistant",
                                    json={"message": message, "role": "clinician"})
             assert response.status_code == 200
+
+
+class TestSuiteSpendsNothing:
+    """A guard on the guard: `pytest` must never bill a live API key."""
+
+    def test_budget_is_zero_in_tests(self):
+        import os
+
+        from aegis_care.assistant.router import DEFAULT_MAX_CALLS
+
+        assert os.environ.get("AEGIS_ASSISTANT_MAX_CALLS") == "0"
+        assert DEFAULT_MAX_CALLS == 0
+
+    def test_odd_input_does_not_call_out(self, client):
+        for message in ("!!!", "select * from patients", "aaaa bbbb cccc dddd"):
+            client.post("/api/assistant", json={"message": message, "role": "clinician"})
+        assert client.get("/api/assistant/status").json()["model_calls"] == 0
