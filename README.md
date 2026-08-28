@@ -65,7 +65,7 @@ python -m aegis_care.cli privacy       # empirical leakage attacks on our own in
 python -m aegis_care.cli experiment    # the full paired matrix -> results/
 python -m aegis_care.cli external-validate --fhir synthea_fhir.zip  # external-format proof
 python -m aegis_care.cli serve         # dashboard at http://127.0.0.1:8000
-pytest -q                              # 206 tests
+pytest -q                              # 220 tests
 
 python scripts/check_reproducible.py               # committed results must re-run identically
 python scripts/reseal_evidence.py results/external_validation --dry-run
@@ -397,7 +397,7 @@ locally and asks you to rephrase otherwise.
 
 ## Verification
 
-`pytest -q` runs 206 tests. Beyond ordinary unit coverage, each of the six **core invariants**
+`pytest -q` runs 220 tests. Beyond ordinary unit coverage, each of the six **core invariants**
 of proposal Section 7.1 and each termination/safety property of Section 6.6 has an
 executable check in [`tests/test_invariants.py`](tests/test_invariants.py):
 

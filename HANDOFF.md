@@ -303,7 +303,7 @@ own wording can never bill a token.
 ## Testing
 
 ```
-217 passed, 1 skipped
+220 passed, 1 skipped
 ```
 
 New suites worth knowing about:
@@ -347,8 +347,9 @@ Python 3.10 and 3.12, plus a reproducibility job.
 - **The guided tour is per-role and first-run only.** There is no replay control
   in the header yet; `startTour(role, {force: true})` exists but is unbound.
 - **The assistant has no undo.** `reset_system` is reachable by phrase for safety
-  and researcher roles. It is destructive to sandbox state only, but a
-  confirmation step would be sensible before any real deployment.
+  and researcher roles. It is destructive to sandbox state only and now requires
+  an explicit plan approval, but compensating actions are still needed before any
+  real deployment.
 - **`fix_everything` always uses depth 4 and the first task.** Fine for a demo,
   too rigid for a benchmark.
 - **Colour carries meaning in several places** (red/green states). Shape or icon
