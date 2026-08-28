@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#07151b">
   <meta name="description" content="AEGIS-Care maps, repairs, and verifies the blast radius of compromised clinical AI memory.">
   <title>AEGIS-Care · Clinical AI Memory Recovery</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2307151b'/%3E%3Crect x='7' y='17' width='4' height='8' fill='%2372e4df'/%3E%3Crect x='14' y='8' width='4' height='17' fill='%2372e4df'/%3E%3Crect x='21' y='13' width='4' height='12' fill='%2372e4df'/%3E%3C/svg%3E">
   <link rel="preload" as="image" href="/static/assets/hospital-operations-hero.png">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
@@ -24,11 +25,20 @@
       <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
       <span class="brand-word">AEGIS<span>·CARE</span></span>
     </button>
-    <div class="header-context">Clinical memory incident recovery</div>
+    <div class="header-context" id="header-context">Clinical memory incident recovery</div>
     <div class="header-status">
+      <button class="role-switch" id="role-switch" type="button" aria-haspopup="listbox"
+              aria-expanded="false" title="Change simulated role">
+        <span class="role-switch-avatar" id="role-switch-avatar" aria-hidden="true"></span>
+        <span class="role-switch-text">
+          <span class="role-switch-label">Signed in as</span>
+          <strong id="role-switch-name">—</strong>
+        </span>
+        <span class="role-switch-caret" aria-hidden="true">▾</span>
+      </button>
+      <div class="role-menu" id="role-menu" role="listbox" aria-label="Choose a simulated role" hidden></div>
       <span class="system-pulse" aria-hidden="true"></span>
       <span id="version">v…</span>
-      <span class="simulation-pill">Synthetic research system</span>
       <button class="theme-toggle" id="theme-toggle" type="button"
               aria-label="Switch colour theme" title="Switch colour theme">
         <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.4v2.6M12 19v2.6M4.2 4.2l1.9 1.9M17.9 17.9l1.9 1.9M2.4 12H5M19 12h2.6M4.2 19.8l1.9-1.9M17.9 6.1l1.9-1.9"/></svg>
@@ -36,25 +46,166 @@
       </button>
     </div>
   </div>
-  <nav class="tabs" id="tabs" role="tablist" aria-label="Console sections">
-    <button data-view="overview" class="active">Mission</button>
-    <button data-view="incident">Incident Lab</button>
-    <button data-view="care">CARE Recovery</button>
-    <button data-view="graph">Memory Graph</button>
-    <button data-view="baselines">Baselines</button>
-    <button data-view="privacy">Privacy Audit</button>
-    <button data-view="evidence">Evidence Center</button>
-    <button data-view="review">Review Queue</button>
-    <button data-view="experiment">Experiments</button>
-    <button data-view="audit">Audit Log</button>
-  </nav>
+  <nav class="tabs" id="tabs" role="tablist" aria-label="Console sections"></nav>
   <div class="safety-line">
     <span>Research boundary</span>
     Fully synthetic FHIR · no diagnosis, treatment, medication execution, or clinical-use claim
+    <b id="safety-role-note"></b>
   </div>
 </header>
 
+
+<!-- ============ ROLE SELECTION (first run) ============ -->
+<div class="role-gate" id="role-gate" hidden>
+  <div class="role-gate-inner">
+    <div class="role-gate-head">
+      <div class="brand-word gate-brand">AEGIS<span>·CARE</span></div>
+      <h1>Who is using this console?</h1>
+      <p>AEGIS-Care shows each role only the information that role is authorised to
+        act on, in the language that role uses. You can change this at any time from
+        the header.</p>
+    </div>
+    <div class="role-gate-grid" id="role-gate-grid"></div>
+    <div class="role-gate-foot">
+      <span class="gate-note-mark" aria-hidden="true">!</span>
+      <div>
+        <strong>This is a simulated role, not a login.</strong>
+        AEGIS-Care is a research prototype running on synthetic records. Role
+        separation is enforced by the service itself; this screen only chooses which
+        authorised view to present.
+      </div>
+    </div>
+  </div>
+</div>
+
 <main id="main" tabindex="-1">
+
+  <!-- ============ CLINICIAN · MY PATIENTS ============ -->
+  <section class="view" id="view-records">
+    <div class="role-intro">
+      <div>
+        <div class="eyebrow">Patient records</div>
+        <h2 id="records-headline">Records the assistant holds about your patients</h2>
+        <p id="records-lede">Each patient shows whether the assistant's notes about them
+          are safe to rely on right now.</p>
+      </div>
+      <div class="role-intro-aside" id="records-rollup"></div>
+    </div>
+    <div class="records-layout">
+      <div class="records-list" id="records-list" aria-label="Patient list"></div>
+      <div class="records-detail" id="records-detail"></div>
+    </div>
+  </section>
+
+  <!-- ============ SAFETY OFFICER · INCIDENT COMMAND ============ -->
+  <section class="view" id="view-command">
+    <div class="role-intro">
+      <div>
+        <div class="eyebrow">Incident command</div>
+        <h2>Contain a memory incident</h2>
+        <p>Find every record that inherited the error, prove which ones actually did,
+          rebuild them from trusted source data, and stop the withdrawn version
+          returning.</p>
+      </div>
+      <div class="role-intro-aside" id="command-status"></div>
+    </div>
+
+    <div class="command-grid">
+      <div class="panel command-setup">
+        <h3>1 · Choose the situation</h3>
+        <p class="hint">In production this is triggered by a reported error. Here you
+          construct one so the response can be demonstrated.</p>
+        <div class="controls">
+          <div class="field"><label for="cmd-family">What went wrong</label>
+            <select id="cmd-family"></select></div>
+          <div class="field"><label for="cmd-prov">How much lineage survived</label>
+            <select id="cmd-prov"></select></div>
+        </div>
+        <div class="quick-actions">
+          <button class="btn ink" id="btn-cmd-inject">Report the error <span>↗</span></button>
+          <button class="btn outline" id="btn-cmd-recover" disabled>Start recovery <span>→</span></button>
+        </div>
+        <div id="command-steps" class="command-steps"></div>
+      </div>
+
+      <div class="panel command-radius">
+        <h3>2 · Blast radius</h3>
+        <p class="hint">Rings are hops away from the original error. Colour is the
+          current state of each record.</p>
+        <div id="blast-radius" class="blast-radius"></div>
+        <div class="blast-legend" id="blast-legend"></div>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+    <div id="command-outcome"></div>
+  </section>
+
+  <!-- ============ COMPLIANCE & REVIEW ============ -->
+  <section class="view" id="view-assurance">
+    <div class="role-intro">
+      <div>
+        <div class="eyebrow">Compliance &amp; review</div>
+        <h2>What left a runtime, and what needs a human</h2>
+        <p>Two duties in one place: confirm no clinical content crossed a boundary it
+          should not have, and decide the cases the system refused to guess at.</p>
+      </div>
+      <div class="role-intro-aside" id="assurance-rollup"></div>
+    </div>
+
+    <div class="assurance-tabs" id="assurance-tabs" role="tablist" aria-label="Assurance sections">
+      <button data-panel="boundary" class="active" role="tab">Data boundary</button>
+      <button data-panel="queue" role="tab">Review queue</button>
+      <button data-panel="leakage" role="tab">Leakage tests</button>
+      <button data-panel="trail" role="tab">Audit trail</button>
+    </div>
+
+    <div class="assurance-panel active" id="assurance-boundary">
+      <div class="panel">
+        <h3>What crossed the boundary</h3>
+        <p class="hint">Every field the recovery service received. Clinical content has
+          no field to travel in.</p>
+        <div id="boundary-diagram"></div>
+        <div id="boundary-detail"></div>
+      </div>
+    </div>
+
+    <div class="assurance-panel" id="assurance-queue">
+      <div class="panel">
+        <h3>Waiting for your decision</h3>
+        <p class="hint">The system quarantines rather than guessing when it cannot
+          rebuild a record safely. Each item needs approve, reject, or hold.</p>
+        <button class="btn ghost small" id="btn-assurance-queue-refresh">Refresh</button>
+        <div id="assurance-queue-result"></div>
+      </div>
+    </div>
+
+    <div class="assurance-panel" id="assurance-leakage">
+      <div class="panel">
+        <h3>Leakage tests</h3>
+        <p class="hint">We attack our own interface and report what succeeds. A result
+          near the baseline means the attack learned nothing beyond chance.</p>
+        <div class="controls">
+          <div class="field"><label for="as-incident">Incident</label>
+            <select id="as-incident"></select></div>
+          <button class="btn" id="btn-assurance-privacy">Run leakage tests</button>
+        </div>
+        <div id="assurance-privacy-result"></div>
+      </div>
+    </div>
+
+    <div class="assurance-panel" id="assurance-trail">
+      <div class="panel">
+        <h3>Append-only audit trail</h3>
+        <p class="hint">Nothing is destructively deleted. Withdrawn content becomes
+          non-servable and leaves a policy-controlled tombstone.</p>
+        <button class="btn ghost small" id="btn-assurance-trail-refresh">Refresh</button>
+        <div class="spacer"></div>
+        <div class="log" id="assurance-log"></div>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ OVERVIEW ============ -->
   <section class="view active" id="view-overview">
     <div id="overview-hero" class="command-hero">
@@ -371,6 +522,18 @@
     </div>
   </section>
 </main>
+
+<div class="coach" id="coach" hidden>
+  <div class="coach-card" id="coach-card">
+    <div class="coach-step" id="coach-step"></div>
+    <h4 id="coach-title"></h4>
+    <p id="coach-body"></p>
+    <div class="coach-actions">
+      <button class="btn ghost small" id="coach-skip">Skip</button>
+      <button class="btn small" id="coach-next">Next</button>
+    </div>
+  </div>
+</div>
 
 <div class="toast-stack" id="toast-stack" role="status" aria-live="polite" aria-atomic="false"></div>
 

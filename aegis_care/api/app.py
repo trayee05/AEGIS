@@ -284,6 +284,167 @@ def memory_graph(memory_key: str) -> Dict[str, Any]:
 
 
 # ======================================================================
+# Patient-centric view
+#
+# The role-separated console needs a record-shaped surface, not a memory-graph
+# one: a nurse asks "can I trust what the assistant told me about this
+# patient", which is a question about one patient's records and their current
+# trust state. These endpoints roll the vaults up per patient. They are
+# clinical-content endpoints, so they are only ever served to a clinical role -
+# the coordinator persona must not reach them.
+# ======================================================================
+TRUST_ORDER = {"quarantined": 0, "suspected": 1, "repaired": 2,
+               "superseded": 3, "tombstoned": 4, "active": 5}
+
+
+def _patient_display(env: Any, patient_id: str) -> Dict[str, Any]:
+    """Name and MRN for a patient token, or a graceful placeholder."""
+    resource = env.fhir.read("Patient", patient_id)
+    if not resource:
+        return {"id": patient_id, "name": patient_id, "mrn": None, "birth_date": None}
+    name = (resource.get("name") or [{}])[0]
+    given = " ".join(name.get("given") or [])
+    identifiers = resource.get("identifier") or [{}]
+    return {
+        "id": patient_id,
+        "name": f"{given} {name.get('family', '')}".strip() or patient_id,
+        "mrn": identifiers[0].get("value"),
+        "birth_date": resource.get("birthDate"),
+    }
+
+
+def _record_rows(env: Any, patient_id: str) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for artifact in env.all_artifacts():
+        if artifact.patient_scope != patient_id:
+            continue
+        rows.append({
+            "key": artifact.key,
+            "memory_id": artifact.memory_id,
+            "version": artifact.version,
+            "owner": artifact.owner.value,
+            "artifact_type": artifact.artifact_type.value,
+            "state": artifact.state.value,
+            "servable": artifact.is_servable(),
+            "created_at": artifact.created_at,
+            "purpose": artifact.purpose,
+            "quarantine_reason": artifact.quarantine_reason,
+            "content": artifact.content,
+        })
+    rows.sort(key=lambda r: (TRUST_ORDER.get(r["state"], 9), r["memory_id"], r["version"]))
+    return rows
+
+
+@app.get("/api/patients")
+def list_patients(only_with_memory: bool = True) -> Dict[str, Any]:
+    """Patients that the agent holds memory about, with a per-patient trust roll-up."""
+    env = state.env
+    buckets: Dict[str, Dict[str, Any]] = {}
+    for artifact in env.all_artifacts():
+        token = artifact.patient_scope
+        if not token:
+            continue
+        bucket = buckets.setdefault(token, {
+            "patient": _patient_display(env, token),
+            "records": 0, "active": 0, "repaired": 0,
+            "quarantined": 0, "withdrawn": 0, "under_review": 0,
+        })
+        bucket["records"] += 1
+        s = artifact.state.value
+        if s == "active":
+            bucket["active"] += 1
+        elif s == "repaired":
+            bucket["repaired"] += 1
+        elif s == "quarantined":
+            bucket["quarantined"] += 1
+        elif s in ("superseded", "tombstoned"):
+            bucket["withdrawn"] += 1
+        elif s == "suspected":
+            bucket["under_review"] += 1
+
+    out = []
+    for token, bucket in buckets.items():
+        # One plain-language status per patient - this is what a nurse reads.
+        # A patient whose only remaining records were withdrawn is NOT "no
+        # issues": entries were wrongly filed against them and then removed,
+        # and the clinician needs to know that happened.
+        live = bucket["active"] + bucket["repaired"]
+        if bucket["quarantined"]:
+            status, headline = "attention", "Held for review"
+        elif bucket["under_review"]:
+            status, headline = "checking", "Being checked"
+        elif bucket["repaired"]:
+            status, headline = "corrected", "Corrected and safe to use"
+        elif bucket["withdrawn"] and not live:
+            status, headline = "withdrawn", "Incorrect entries removed"
+        else:
+            status, headline = "clear", "No issues found"
+        out.append({**bucket, "token": token, "status": status, "headline": headline})
+
+    order = {"attention": 0, "checking": 1, "corrected": 2, "withdrawn": 3, "clear": 4}
+    out.sort(key=lambda r: (order[r["status"]], r["patient"]["name"]))
+    return {"count": len(out), "patients": out}
+
+
+@app.get("/api/patients/{patient_id}/record")
+def patient_record(patient_id: str) -> Dict[str, Any]:
+    """One patient's records, newest state first, with what changed and why.
+
+    `changes` pairs each repaired record with the version it replaced so the
+    interface can show a real before/after rather than asserting a correction.
+    """
+    env = state.env
+    rows = _record_rows(env, patient_id)
+    if not rows:
+        raise HTTPException(404, f"no memory held about patient {patient_id}")
+
+    # A wrong-patient incident files a record under the WRONG patient, so the
+    # repaired version and the version it replaced sit under different patient
+    # scopes. Predecessors are therefore looked up across every vault by
+    # memory_id, and the change reports which patient the record used to be
+    # filed under - which is the fact a clinician actually needs.
+    all_versions: Dict[str, List[Any]] = {}
+    for artifact in env.all_artifacts():
+        all_versions.setdefault(artifact.memory_id, []).append(artifact)
+
+    changes = []
+    for row in rows:
+        if row["state"] != "repaired":
+            continue
+        siblings = sorted(all_versions.get(row["memory_id"], []), key=lambda a: a.version)
+        previous = next((a for a in reversed(siblings) if a.version < row["version"]), None)
+        if previous is None:
+            continue
+        changes.append({
+            "memory_id": row["memory_id"],
+            "artifact_type": row["artifact_type"],
+            "owner": row["owner"],
+            "from_version": previous.version,
+            "to_version": row["version"],
+            "before": previous.content,
+            "after": row["content"],
+            "previously_filed_under": previous.patient_scope,
+            "refiled": previous.patient_scope != patient_id,
+            "rebuilt_at": row["created_at"],
+        })
+
+    held = [r for r in rows if r["state"] == "quarantined"]
+    return {
+        "patient": _patient_display(env, patient_id),
+        "records": rows,
+        "changes": changes,
+        "held_for_review": held,
+        "summary": {
+            "total": len(rows),
+            "in_use": sum(1 for r in rows if r["servable"]),
+            "corrected": len(changes),
+            "held": len(held),
+            "withdrawn": sum(1 for r in rows if r["state"] in ("superseded", "tombstoned")),
+        },
+    }
+
+
+# ======================================================================
 # Incidents
 # ======================================================================
 @app.post("/api/incidents")

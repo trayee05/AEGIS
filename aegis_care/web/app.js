@@ -15,6 +15,11 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g,
 const fmt = (v, d = 3) => (typeof v === "number" ? v.toFixed(d) : (v ?? "—"));
 
 const STATE = {
+  role: null,
+  patients: [],
+  selectedPatient: null,
+  commandIncident: null,
+  commandRecovery: null,
   system: null,
   evidence: null,
   incidents: [],
@@ -100,6 +105,127 @@ function initTheme() {
   });
 }
 
+
+/* ================= ROLES =================
+ * A role is not a skin. Each role has a different question, so each gets a
+ * different set of views, a different landing view, and its own vocabulary for
+ * the same underlying numbers. The service enforces the real policy; this layer
+ * decides what is worth showing and what to call it.
+ */
+const ROLES = {
+  clinician: {
+    label: "Nurse / Clinician",
+    short: "Clinician",
+    initials: "NC",
+    question: "Can I trust what the assistant told me about this patient?",
+    blurb: "See which of your patients have records that were corrected, withdrawn, or are waiting on a review.",
+    duties: ["Check a patient's records", "See exactly what changed", "Know what to re-verify"],
+    views: ["records"],
+    home: "records",
+    context: "Patient record assurance",
+    note: "You are seeing clinical content for patients in your care only.",
+    accent: "good",
+  },
+  safety: {
+    label: "Clinical Safety Officer",
+    short: "Safety",
+    initials: "SO",
+    question: "What is the blast radius, and is it contained?",
+    blurb: "Run the containment loop end to end: find affected records, prove which were really affected, rebuild them, and keep the bad version out.",
+    duties: ["Contain a reported error", "Track the blast radius", "Sign off safe resume"],
+    views: ["command", "graph"],
+    home: "command",
+    context: "Incident containment",
+    note: "You coordinate recovery and never receive clinical content.",
+    accent: "accent",
+  },
+  compliance: {
+    label: "Compliance & Review Officer",
+    short: "Compliance",
+    initials: "CR",
+    question: "Did anything leave a runtime that shouldn't have, and what needs a human?",
+    blurb: "Audit every field that crossed a boundary, run the leakage tests, and clear the queue of records the system refused to guess at.",
+    duties: ["Audit the data boundary", "Decide quarantined records", "Review the audit trail"],
+    views: ["assurance"],
+    home: "assurance",
+    context: "Assurance & review",
+    note: "You see metadata and audit evidence, plus records escalated for review.",
+    accent: "warn",
+  },
+  researcher: {
+    label: "Researcher / Evaluator",
+    short: "Researcher",
+    initials: "RE",
+    question: "Does the mechanism hold across conditions?",
+    blurb: "The full experimental console: paired baselines, the provenance matrix, privacy attacks, and the hash-bound evidence package.",
+    duties: ["Run the paired matrix", "Compare all nine conditions", "Verify the evidence package"],
+    views: ["overview", "incident", "care", "graph", "baselines", "privacy",
+            "evidence", "review", "experiment", "audit"],
+    home: "overview",
+    context: "Clinical memory incident recovery",
+    note: "Full research console.",
+    accent: "muted",
+  },
+};
+
+const VIEW_LABELS = {
+  records: "My Patients", command: "Incident Command", assurance: "Assurance",
+  overview: "Mission", incident: "Incident Lab", care: "CARE Recovery",
+  graph: "Memory Graph", baselines: "Baselines", privacy: "Privacy Audit",
+  evidence: "Evidence Center", review: "Review Queue",
+  experiment: "Experiments", audit: "Audit Log",
+};
+
+/* The same measurement, named for the person reading it. */
+const VOCAB = {
+  clinician: {
+    rwh: "Patients still affected", descendant_recall: "Affected records found",
+    descendant_precision: "Correctly identified", bsr: "Untouched records preserved",
+    rts: "Follow-up answered correctly", uer: "Shared beyond permission",
+    drr: "Withdrawn entries that returned", quarantined: "Held for a person to review",
+    repaired: "Corrected", superseded: "Withdrawn", tombstoned: "Withdrawn",
+    active: "In use", suspected: "Being checked",
+  },
+  safety: {
+    rwh: "Residual harm", descendant_recall: "Coverage of affected records",
+    descendant_precision: "Precision", bsr: "Clean state retained",
+    rts: "Follow-up task success", uer: "Data shared beyond permission",
+    drr: "Withdrawn entries that returned", quarantined: "Held for review",
+    repaired: "Rebuilt", superseded: "Withdrawn", tombstoned: "Withdrawn",
+    active: "In use", suspected: "Under investigation",
+  },
+  compliance: {
+    rwh: "Residual harm", descendant_recall: "Coverage",
+    descendant_precision: "Precision", bsr: "Clean state retained",
+    rts: "Task success", uer: "Unauthorised exposure",
+    drr: "Resurrection rate", quarantined: "Escalated to review",
+    repaired: "Rebuilt", superseded: "Withdrawn", tombstoned: "Tombstoned",
+    active: "Active", suspected: "Suspected",
+  },
+  researcher: {
+    rwh: "Residual wrong-patient / unauthorized harm (RWH)",
+    descendant_recall: "Descendant recall",
+    descendant_precision: "Descendant precision",
+    bsr: "Benign-state retention (BSR)", rts: "Repaired task success (RTS)",
+    uer: "Unauthorized exposure rate (UER)", drr: "Deletion resurrection rate (DRR)",
+    quarantined: "quarantined", repaired: "repaired", superseded: "superseded",
+    tombstoned: "tombstoned", active: "active", suspected: "suspected",
+  },
+};
+
+const ROLE_KEY = "aegis-role";
+function storedRole() {
+  try { const r = localStorage.getItem(ROLE_KEY); return ROLES[r] ? r : null; }
+  catch (e) { return null; }
+}
+function currentRole() { return STATE.role || "researcher"; }
+function role() { return ROLES[currentRole()]; }
+
+/* Translate a metric key into the active role's wording. */
+function t(key, fallback) {
+  return (VOCAB[currentRole()] || {})[key] || fallback || key;
+}
+
 /* ---------------- navigation ---------------- */
 const TABS = () => Array.from(document.querySelectorAll("nav.tabs button[data-view]"));
 
@@ -120,26 +246,38 @@ function activateView(name, { scroll = true, focusTab = false } = {}) {
   if (name === "graph") drawGraph();
   if (name === "audit") loadAudit();
   if (name === "review") loadReview();
+  if (name === "records") loadPatients();
+  if (name === "command") initCommandView();
+  if (name === "assurance") initAssuranceView();
   if (scroll) window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function initTabs() {
-  TABS().forEach((btn) => {
-    const name = btn.dataset.view;
+function buildTabs() {
+  const nav = $("tabs");
+  nav.innerHTML = "";
+  role().views.forEach((name) => {
+    const btn = el("button", null, esc(VIEW_LABELS[name] || name));
     btn.type = "button";
+    btn.dataset.view = name;
     btn.setAttribute("role", "tab");
     btn.id = `tab-${name}`;
     btn.setAttribute("aria-controls", `view-${name}`);
-    btn.setAttribute("aria-selected", btn.classList.contains("active") ? "true" : "false");
-    btn.tabIndex = btn.classList.contains("active") ? 0 : -1;
-    const view = $(`view-${name}`);
+    nav.appendChild(btn);
+  });
+  // A single-view role has nothing to navigate between.
+  nav.hidden = role().views.length < 2;
+
+  TABS().forEach((btn) => {
+    const view = $(`view-${btn.dataset.view}`);
     if (view) {
       view.setAttribute("role", "tabpanel");
-      view.setAttribute("aria-labelledby", `tab-${name}`);
+      view.setAttribute("aria-labelledby", `tab-${btn.dataset.view}`);
       view.tabIndex = 0;
     }
   });
+}
 
+function initTabs() {
   $("tabs").addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-view]");
     if (btn) activateView(btn.dataset.view);
@@ -149,6 +287,7 @@ function initTabs() {
     const keys = { ArrowRight: 1, ArrowLeft: -1, Home: "first", End: "last" };
     if (!(e.key in keys)) return;
     const tabs = TABS();
+    if (!tabs.length) return;
     const at = tabs.findIndex((b) => b.getAttribute("aria-selected") === "true");
     let next;
     if (keys[e.key] === "first") next = 0;
@@ -160,16 +299,113 @@ function initTabs() {
 
   document.addEventListener("click", (e) => {
     const target = e.target.closest("[data-view-target]");
-    if (target) activateView(target.dataset.viewTarget);
+    if (target && role().views.includes(target.dataset.viewTarget)) {
+      activateView(target.dataset.viewTarget);
+    }
   });
 
-  // Deep links and the browser back button both address a view by hash.
   const fromHash = () => {
     const name = location.hash.replace("#", "");
-    if (name && $(`view-${name}`)) activateView(name, { scroll: false });
+    if (name && $(`view-${name}`) && role().views.includes(name)) {
+      activateView(name, { scroll: false });
+    }
   };
   window.addEventListener("hashchange", fromHash);
   fromHash();
+}
+
+/* ---------------- role gate & switcher ---------------- */
+function renderRoleGate() {
+  const grid = $("role-gate-grid");
+  grid.innerHTML = "";
+  Object.entries(ROLES).forEach(([id, r]) => {
+    const card = el("button", `role-card accent-${r.accent}`);
+    card.type = "button";
+    card.dataset.role = id;
+    card.innerHTML =
+      `<span class="role-card-avatar" aria-hidden="true">${esc(r.initials)}</span>
+       <span class="role-card-label">${esc(r.label)}</span>
+       <span class="role-card-question">${esc(r.question)}</span>
+       <span class="role-card-blurb">${esc(r.blurb)}</span>
+       <span class="role-card-duties">${r.duties.map((d) =>
+         `<i>${esc(d)}</i>`).join("")}</span>
+       <span class="role-card-go">Continue <b aria-hidden="true">→</b></span>`;
+    card.addEventListener("click", () => selectRole(id, { firstRun: true }));
+    grid.appendChild(card);
+  });
+}
+
+function renderRoleMenu() {
+  const menu = $("role-menu");
+  menu.innerHTML = "";
+  Object.entries(ROLES).forEach(([id, r]) => {
+    const item = el("button", `role-menu-item${id === currentRole() ? " is-current" : ""}`);
+    item.type = "button";
+    item.setAttribute("role", "option");
+    item.setAttribute("aria-selected", id === currentRole() ? "true" : "false");
+    item.innerHTML =
+      `<span class="role-menu-avatar" aria-hidden="true">${esc(r.initials)}</span>
+       <span><strong>${esc(r.label)}</strong><small>${esc(r.question)}</small></span>`;
+    item.addEventListener("click", () => { closeRoleMenu(); selectRole(id); });
+    menu.appendChild(item);
+  });
+}
+
+function openRoleMenu() {
+  renderRoleMenu();
+  $("role-menu").hidden = false;
+  $("role-switch").setAttribute("aria-expanded", "true");
+}
+function closeRoleMenu() {
+  $("role-menu").hidden = true;
+  $("role-switch").setAttribute("aria-expanded", "false");
+}
+
+function selectRole(id, { firstRun = false } = {}) {
+  if (!ROLES[id]) return;
+  STATE.role = id;
+  try { localStorage.setItem(ROLE_KEY, id); } catch (e) { /* storage blocked */ }
+  document.documentElement.dataset.role = id;
+
+  const r = ROLES[id];
+  $("role-switch-name").textContent = r.short;
+  $("role-switch-avatar").textContent = r.initials;
+  $("header-context").textContent = r.context;
+  $("safety-role-note").textContent = r.note;
+  $("role-gate").hidden = true;
+
+  buildTabs();
+  activateView(r.home, { scroll: false });
+  renderRoleSurface();
+  if (firstRun) startTour(id);
+}
+
+function initRoles() {
+  renderRoleGate();
+  $("role-switch").addEventListener("click", (e) => {
+    e.stopPropagation();
+    $("role-menu").hidden ? openRoleMenu() : closeRoleMenu();
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#role-menu") && !e.target.closest("#role-switch")) closeRoleMenu();
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeRoleMenu(); });
+
+  const saved = storedRole();
+  if (saved) {
+    selectRole(saved);
+  } else {
+    $("role-gate").hidden = false;
+    STATE.role = "researcher";       // a safe default until a choice is made
+  }
+}
+
+/* Load whatever the active role's landing view needs. */
+function renderRoleSurface() {
+  const id = currentRole();
+  if (id === "clinician") loadPatients();
+  if (id === "safety") initCommandView();
+  if (id === "compliance") initAssuranceView();
 }
 
 /* ---------------- table helper ---------------- */
@@ -210,6 +446,7 @@ function stateBadge(s) { return `<span class="badge ${esc(s)}">${esc(s)}</span>`
 async function boot() {
   initTheme();
   initTabs();
+  initTour();
   const health = await api("/api/health");
   $("version").textContent = `v${health.version} · ${health.model}`;
   STATE.system = await api("/api/system");
@@ -221,6 +458,8 @@ async function boot() {
   initMotion();
   initGraphViewport();
   await refreshIncidents();
+  // Roles come last: the surface a role lands on needs system data to exist.
+  initRoles();
 }
 
 function renderOverview() {
@@ -590,8 +829,9 @@ function initMotion() {
 async function refreshIncidents() {
   const data = await api("/api/incidents");
   STATE.incidents = data.incidents;
-  ["care-incident", "bl-incident", "pv-incident"].forEach((id) => {
+  ["care-incident", "bl-incident", "pv-incident", "as-incident"].forEach((id) => {
     const sel = $(id);
+    if (!sel) return;
     const prev = sel.value;
     sel.innerHTML = "";
     STATE.incidents.forEach((i) => sel.appendChild(
@@ -623,6 +863,7 @@ async function refreshIncidents() {
   ]));
   STATE.system = await api("/api/system");
   renderOverview();
+  if (currentRole() === "clinician") loadPatients();
 }
 
 $("btn-create").addEventListener("click", async () => {
@@ -1408,3 +1649,813 @@ boot().catch((e) => {
      <span class="small">The API did not answer. Confirm the server is running, then reload.</span></div>`;
   toast("Dashboard failed to start", { detail: e.message, kind: "bad", timeout: 0 });
 });
+
+/* ================= CLINICIAN · MY PATIENTS =================
+ * A clinician's question is about a patient, not a memory graph. This view is
+ * record-shaped: who is affected, what changed, and what to re-verify.
+ */
+const STATUS_COPY = {
+  attention: { label: "Needs attention", icon: "!", tone: "bad" },
+  checking: { label: "Being checked", icon: "…", tone: "warn" },
+  corrected: { label: "Corrected", icon: "✓", tone: "good" },
+  withdrawn: { label: "Entries removed", icon: "✖", tone: "warn" },
+  clear: { label: "No issues", icon: "✓", tone: "muted" },
+};
+
+async function loadPatients() {
+  const list = $("records-list");
+  list.innerHTML = '<div class="loading-row"><span class="spinner"></span>Loading patients…</div>';
+  try {
+    const data = await api("/api/patients");
+    STATE.patients = data.patients;
+    renderPatientRollup();
+    renderPatientList();
+    const keep = STATE.selectedPatient
+      && STATE.patients.some((p) => p.token === STATE.selectedPatient);
+    selectPatient(keep ? STATE.selectedPatient : (STATE.patients[0]?.token ?? null));
+  } catch (e) {
+    list.innerHTML = `<div class="notice bad">${esc(e.message)}</div>`;
+  }
+}
+
+function renderPatientRollup() {
+  const counts = { attention: 0, checking: 0, corrected: 0, withdrawn: 0, clear: 0 };
+  STATE.patients.forEach((p) => { counts[p.status] = (counts[p.status] || 0) + 1; });
+  const needsYou = counts.attention;
+  $("records-rollup").innerHTML =
+    `<div class="rollup ${needsYou ? "is-alert" : "is-calm"}">
+       <div class="rollup-figure">${needsYou}</div>
+       <div class="rollup-copy">
+         <strong>${needsYou ? "need your attention" : "nothing needs you"}</strong>
+         <span>${counts.corrected} corrected · ${counts.withdrawn} with entries removed ·
+           ${counts.clear} with no issues</span>
+       </div>
+     </div>`;
+}
+
+function renderPatientList() {
+  const list = $("records-list");
+  list.innerHTML = "";
+  if (!STATE.patients.length) {
+    list.innerHTML =
+      `<div class="empty-teach">
+         <strong>No patient records yet.</strong>
+         <span>The assistant has not stored anything about a patient in this session.
+           A safety officer creates activity from Incident Command.</span>
+       </div>`;
+    $("records-detail").innerHTML = "";
+    return;
+  }
+  STATE.patients.forEach((p) => {
+    const s = STATUS_COPY[p.status];
+    const row = el("button", `patient-row tone-${s.tone}`);
+    row.type = "button";
+    row.dataset.token = p.token;
+    row.innerHTML =
+      `<span class="patient-flag" aria-hidden="true">${esc(s.icon)}</span>
+       <span class="patient-main">
+         <strong>${esc(p.patient.name)}</strong>
+         <small>MRN ${esc(p.patient.mrn ?? "—")}</small>
+       </span>
+       <span class="patient-state">
+         <span class="patient-headline">${esc(p.headline)}</span>
+         <small>${p.records} record${p.records === 1 ? "" : "s"}</small>
+       </span>`;
+    row.addEventListener("click", () => selectPatient(p.token));
+    list.appendChild(row);
+  });
+}
+
+async function selectPatient(token) {
+  STATE.selectedPatient = token;
+  document.querySelectorAll(".patient-row").forEach((r) =>
+    r.classList.toggle("is-selected", r.dataset.token === token));
+  const out = $("records-detail");
+  if (!token) { out.innerHTML = ""; return; }
+  out.innerHTML = '<div class="loading-row"><span class="spinner"></span>Opening record…</div>';
+  try {
+    renderPatientRecord(await api(`/api/patients/${encodeURIComponent(token)}/record`), out);
+  } catch (e) {
+    out.innerHTML = `<div class="notice bad">${esc(e.message)}</div>`;
+  }
+}
+
+function renderPatientRecord(data, out) {
+  const p = data.patient;
+  const s = data.summary;
+  out.innerHTML = "";
+
+  // A plain-language verdict first. Everything else is supporting detail.
+  let verdict, tone, advice;
+  const live = s.in_use;
+  if (s.held) {
+    verdict = `${s.held} record${s.held === 1 ? " is" : "s are"} held for review`;
+    tone = "bad";
+    advice = "Do not rely on the held items. A reviewer must approve them first.";
+  } else if (s.corrected) {
+    verdict = `${s.corrected} record${s.corrected === 1 ? " was" : "s were"} corrected`;
+    tone = "good";
+    advice = "The corrected versions are safe to use. Review what changed below.";
+  } else if (s.withdrawn && !live) {
+    verdict = `${s.withdrawn} entr${s.withdrawn === 1 ? "y was" : "ies were"} removed from this record`;
+    tone = "warn";
+    advice = "These entries were filed against this patient in error and have been "
+      + "withdrawn. Nothing here is in active use. If you acted on them earlier, "
+      + "re-check against the source record.";
+  } else {
+    verdict = "No issues found in this patient's records";
+    tone = "muted";
+    advice = "Nothing about this patient was affected.";
+  }
+
+  const head = el("div", "record-head");
+  head.innerHTML =
+    `<div class="record-identity">
+       <div class="record-avatar" aria-hidden="true">${esc((p.name || "?").slice(0, 1))}</div>
+       <div>
+         <h3>${esc(p.name)}</h3>
+         <div class="record-meta">MRN ${esc(p.mrn ?? "—")}${
+           p.birth_date ? ` · born ${esc(p.birth_date)}` : ""}</div>
+       </div>
+     </div>
+     <div class="record-verdict tone-${tone}">
+       <strong>${esc(verdict)}</strong>
+       <span>${esc(advice)}</span>
+     </div>`;
+  out.appendChild(head);
+
+  const stats = el("div", "record-stats");
+  [[s.total, "records held"], [s.in_use, "in use now"],
+   [s.corrected, "corrected"], [s.withdrawn, "withdrawn"]]
+    .forEach(([value, label]) => {
+      stats.appendChild(el("div", "record-stat",
+        `<b>${esc(value)}</b><span>${esc(label)}</span>`));
+    });
+  out.appendChild(stats);
+
+  if (data.changes.length) {
+    out.appendChild(el("h4", "record-section", "What changed"));
+    data.changes.forEach((c) => out.appendChild(renderChange(c)));
+  }
+
+  if (data.held_for_review.length) {
+    out.appendChild(el("h4", "record-section", "Held for review"));
+    data.held_for_review.forEach((h) => {
+      out.appendChild(el("div", "held-card",
+        `<strong>${esc(String(h.artifact_type).replace(/_/g, " "))}</strong>
+         <p>${esc(h.quarantine_reason || "Could not be rebuilt safely.")}</p>
+         <small>Do not rely on this item until a reviewer clears it.</small>`));
+    });
+  }
+
+  const det = el("details", "record-all");
+  det.appendChild(el("summary", null, `All records held about this patient (${data.records.length})`));
+  det.appendChild(table(data.records, [
+    { key: "artifact_type", label: "Record",
+      render: (r) => esc(String(r.artifact_type).replace(/_/g, " ")) },
+    { key: "state", label: "Status",
+      render: (r) => `<span class="badge ${esc(r.state)}">${esc(t(r.state, r.state))}</span>` },
+    { key: "servable", label: "In use", render: (r) => r.servable ? "yes" : "no" },
+    { key: "version", label: "Version", num: true, render: (r) => `v${r.version}` },
+  ]));
+  out.appendChild(det);
+}
+
+/* A real before/after, with the re-filing called out - that is the fact a
+ * clinician needs, not the derivation mechanics. */
+function renderChange(c) {
+  const card = el("div", "change-card");
+  card.innerHTML =
+    `<div class="change-head">
+       <strong>${esc(String(c.artifact_type).replace(/_/g, " "))}</strong>
+       <span class="change-tag">v${esc(c.from_version)} → v${esc(c.to_version)}</span>
+     </div>
+     ${c.refiled ? `<div class="change-refiled">
+        <span aria-hidden="true">⚠</span> This record was previously filed under a
+        different patient (${esc(c.previously_filed_under)}).</div>` : ""}
+     <div class="diff">
+       <div class="diff-side was">
+         <div class="diff-label">Was — do not use</div>
+         <p>${esc(c.before)}</p>
+       </div>
+       <div class="diff-side now">
+         <div class="diff-label">Now — rebuilt from source records</div>
+         <p>${esc(c.after)}</p>
+       </div>
+     </div>`;
+  return card;
+}
+
+/* ================= SAFETY OFFICER - INCIDENT COMMAND =================
+ * The safety officer's object is an incident, and the question is containment.
+ * The blast radius replaces the derivation graph: rings are hops from the
+ * original error, colour is the current state. Containment is legible at a
+ * glance instead of requiring the reader to trace edges.
+ */
+const CMD_STEPS = [
+  ["Find", "Search lineage and similarity for records that may have inherited the error"],
+  ["Prove", "Rebuild each candidate without the suspect entry to see if it actually mattered"],
+  ["Rebuild", "Recreate confirmed records from trusted source data, or hold them for review"],
+  ["Hold the line", "Withdraw the bad versions and block them from coming back"],
+];
+
+const PROV_COPY = {
+  complete: "Complete - every link recorded",
+  random20: "Patchy - about 20% of links lost",
+  random40: "Degraded - about 40% of links lost",
+  random60: "Severe - about 60% of links lost",
+  targeted: "Worst case - the links that matter most are missing",
+};
+
+function initCommandView() {
+  if (STATE.commandReady) { renderCommandStatus(); return; }
+  STATE.commandReady = true;
+
+  const fam = $("cmd-family");
+  fam.innerHTML = "";
+  Object.entries(STATE.system.families).forEach(([id, f]) =>
+    fam.appendChild(new Option(f.name, id)));
+
+  const prov = $("cmd-prov");
+  prov.innerHTML = "";
+  STATE.system.provenance_conditions.forEach((c) =>
+    prov.appendChild(new Option(PROV_COPY[c] || c, c)));
+  prov.value = "targeted";
+
+  renderCommandSteps(-1);
+  renderCommandStatus();
+  renderBlastRadius(null, null);
+
+  $("btn-cmd-inject").addEventListener("click", commandInject);
+  $("btn-cmd-recover").addEventListener("click", commandRecover);
+}
+
+function renderCommandSteps(activeIndex, done = -1) {
+  $("command-steps").innerHTML = CMD_STEPS.map(([name, desc], i) =>
+    `<div class="cmd-step${i === activeIndex ? " is-active" : ""}${i <= done ? " is-done" : ""}">
+       <span class="cmd-step-dot" aria-hidden="true">${i <= done ? "✓" : i + 1}</span>
+       <span><strong>${esc(name)}</strong><small>${esc(desc)}</small></span>
+     </div>`).join("");
+}
+
+function renderCommandStatus() {
+  const inc = STATE.commandIncident;
+  const rec = STATE.commandRecovery;
+  let tone = "idle", head = "No active incident", sub = "Report an error to begin.";
+  if (inc && !rec) {
+    tone = "alert";
+    head = "Containment required";
+    sub = `${inc.true_contaminated.length} record${
+      inc.true_contaminated.length === 1 ? "" : "s"} affected · ${
+      inc.provenance?.edges_removed ?? 0} of ${
+      inc.provenance?.edges_before ?? 0} links missing`;
+  } else if (rec) {
+    const safe = rec.certificate?.safe_resume;
+    tone = safe ? "clear" : "alert";
+    head = safe ? "Contained" : "Review required";
+    sub = safe
+      ? `${rec.repaired.length} rebuilt · ${rec.enforcement.tombstones} withdrawn · ${
+          rec.resurrection_probe.blocked}/${rec.resurrection_probe.attempts} return attempts blocked`
+      : `${(rec.certificate?.unresolved_risk || []).length} item(s) unresolved`;
+  }
+  $("command-status").innerHTML =
+    `<div class="cmd-status is-${tone}">
+       <span class="cmd-status-dot" aria-hidden="true"></span>
+       <div><strong>${esc(head)}</strong><span>${esc(sub)}</span></div>
+     </div>`;
+}
+
+async function commandInject() {
+  const btn = $("btn-cmd-inject");
+  btn.disabled = true;
+  $("btn-cmd-recover").disabled = true;
+  STATE.commandRecovery = null;
+  $("command-outcome").innerHTML = "";
+  renderCommandSteps(0);
+  try {
+    const family = $("cmd-family").value;
+    const graph = await api("/api/memory/none/graph");
+    const task = recommendedTask(family, graph.nodes || []);
+    const created = await api("/api/incidents", {
+      method: "POST",
+      body: JSON.stringify({ family, task_id: task.task_id, depth: 4,
+                             provenance: $("cmd-prov").value, n_controls: 1 }),
+    });
+    const detail = await api(`/api/incidents/${encodeURIComponent(created.incident_id)}`);
+    STATE.commandIncident = detail;
+    renderBlastRadius(detail, null);
+    renderCommandStatus();
+    renderCommandSteps(-1);
+    $("btn-cmd-recover").disabled = false;
+    toast("Error reported", {
+      detail: `${detail.true_contaminated.length} records affected.`, kind: "warn" });
+    await refreshIncidents();
+  } catch (e) {
+    toast("Could not report the error", { detail: e.message, kind: "bad" });
+    renderCommandSteps(-1);
+  } finally { btn.disabled = false; }
+}
+
+async function commandRecover() {
+  if (!STATE.commandIncident) return;
+  const btn = $("btn-cmd-recover");
+  btn.disabled = true;
+  // Walk the four stages while the request is in flight so the operator sees
+  // what the system is doing, not just a spinner.
+  let step = 0;
+  renderCommandSteps(0);
+  const ticker = window.setInterval(() => {
+    step = Math.min(step + 1, CMD_STEPS.length - 1);
+    renderCommandSteps(step, step - 1);
+  }, 520);
+  try {
+    const rec = await api("/api/recover", {
+      method: "POST",
+      body: JSON.stringify({ incident_id: STATE.commandIncident.incident_id }),
+    });
+    window.clearInterval(ticker);
+    renderCommandSteps(-1, CMD_STEPS.length - 1);
+    STATE.commandRecovery = rec;
+    STATE.lastRecovery = rec;
+    renderBlastRadius(STATE.commandIncident, rec);
+    renderCommandStatus();
+    renderCommandOutcome(rec);
+    toast(rec.certificate?.safe_resume ? "Incident contained" : "Review required", {
+      detail: `${rec.repaired.length} rebuilt · ${rec.quarantined.length} held.`,
+      kind: rec.certificate?.safe_resume ? "good" : "warn" });
+    await refreshIncidents();
+  } catch (e) {
+    window.clearInterval(ticker);
+    renderCommandSteps(-1);
+    toast("Recovery failed", { detail: e.message, kind: "bad" });
+  } finally { btn.disabled = false; }
+}
+
+function renderCommandOutcome(rec) {
+  const out = $("command-outcome");
+  out.innerHTML = "";
+  const m = rec.metrics || {};
+  const safe = rec.certificate?.safe_resume;
+
+  out.appendChild(el("div", `verdict-banner ${safe ? "is-good" : "is-warn"}`,
+    `<div class="verdict-mark" aria-hidden="true">${safe ? "✓" : "!"}</div>
+     <div><strong>${safe ? "Safe to resume" : "Hold - review required"}</strong>
+       <span>${safe
+         ? `Closure reached in ${rec.rounds} round(s). Every affected record was rebuilt from trusted source data, and the withdrawn versions are blocked from returning.`
+         : `${(rec.certificate?.unresolved_risk || []).length} item(s) could not be resolved automatically and were escalated.`}</span>
+     </div>`));
+
+  const cards = el("div", "outcome-cards");
+  [[t("rwh"), m.rwh, true], [t("descendant_recall"), m.descendant_recall, false],
+   [t("bsr"), m.bsr, false], [t("drr"), m.drr, true]]
+    .forEach(([label, value, lowerBetter]) => {
+      const ok = lowerBetter ? (value === 0) : (value >= 0.999);
+      cards.appendChild(el("div", `outcome-card ${ok ? "is-good" : "is-warn"}`,
+        `<span class="outcome-label">${esc(label)}</span>
+         <b>${fmt(value)}</b>
+         <small>${lowerBetter ? "lower is better" : "higher is better"}</small>`));
+    });
+  out.appendChild(cards);
+
+  const det = el("details", "record-all");
+  det.appendChild(el("summary", null, "Full recovery certificate"));
+  det.appendChild(el("pre", "cert", esc(rec.certificate_text)));
+  out.appendChild(det);
+}
+
+/* Concentric rings = hops from the seed. One glance tells you how far it went
+ * and how much is repaired. */
+function renderBlastRadius(incident, recovery) {
+  const host = $("blast-radius");
+  if (!incident) {
+    host.innerHTML =
+      `<div class="empty-teach centered">
+         <strong>No incident yet.</strong>
+         <span>Report an error and the affected records will appear here as rings
+           spreading out from the original mistake.</span>
+       </div>`;
+    $("blast-legend").innerHTML = "";
+    return;
+  }
+
+  const nodes = incident.trajectory || [];
+  const repaired = new Set((recovery?.repaired || []).map((r) => r.memory_key));
+  const quarantined = new Set((recovery?.quarantined || []).map((r) => r.memory_key));
+  const maxDepth = Math.max(...nodes.map((n) => n.depth), 1);
+
+  const size = 500, cx = size / 2, cy = size / 2;
+  // The first ring clears the centre node's own label, so the seed never
+  // collides with its immediate descendants.
+  const innerR = 74;
+  const outerR = size / 2 - 62;
+  const ringGap = (outerR - innerR) / Math.max(maxDepth - 1, 1);
+  const radiusFor = (depth) => (depth === 0 ? 0 : innerR + ringGap * (depth - 1));
+
+  const rings = Array.from({ length: maxDepth }, (_, i) =>
+    `<circle class="blast-ring" cx="${cx}" cy="${cy}" r="${radiusFor(i + 1)}"/>`
+  ).join("");
+
+  // Nodes are placed by depth ring. Rings are rotated by the golden angle so a
+  // chain with one node per depth spirals outward instead of stacking in a
+  // single vertical line, and labels never sit on top of each other.
+  const GOLDEN = 2.399963;
+  const byDepth = {};
+  nodes.forEach((n) => (byDepth[n.depth] = byDepth[n.depth] || []).push(n));
+  const marks = nodes.map((n) => {
+    const peers = byDepth[n.depth];
+    const idx = peers.indexOf(n);
+    const r = radiusFor(n.depth);
+    const angle = (-Math.PI / 2) + (idx / peers.length) * Math.PI * 2 + n.depth * GOLDEN;
+    const x = cx + r * Math.cos(angle);
+    const y = cy + r * Math.sin(angle);
+    let cls = "is-clean";
+    if (quarantined.has(n.key)) cls = "is-held";
+    else if (repaired.has(n.key)) cls = "is-repaired";
+    else if (n.contaminated) cls = "is-affected";
+    const seed = n.key === incident.seed_key ? " is-seed" : "";
+    const label = String(n.type || "").replace(/_/g, " ");
+    // Keep the label inside the frame for nodes near the right or left edge.
+    const anchor = x > size - 78 ? "end" : (x < 78 ? "start" : "middle");
+    const dx = anchor === "end" ? 14 : (anchor === "start" ? -14 : 0);
+    return `<g class="blast-node ${cls}${seed}" transform="translate(${x} ${y})">
+        <circle class="blast-halo" r="21"/>
+        <circle class="blast-core" r="11"/>
+        <text y="30" dx="${dx}" text-anchor="${anchor}">${
+          esc(label.length > 17 ? label.slice(0, 16) + "…" : label)}</text>
+        <title>${esc(n.key)} · ${esc(t(n.state, n.state))}</title>
+      </g>`;
+  }).join("");
+
+  host.innerHTML =
+    `<svg viewBox="0 0 ${size} ${size}" role="img"
+          aria-label="Blast radius: ${nodes.length} records across ${maxDepth} hops">
+       ${rings}${marks}
+     </svg>`;
+
+  const counts = {
+    affected: nodes.filter((n) => n.contaminated && !repaired.has(n.key)).length,
+    repaired: nodes.filter((n) => repaired.has(n.key)).length,
+    held: nodes.filter((n) => quarantined.has(n.key)).length,
+  };
+  $("blast-legend").innerHTML =
+    `<span class="blast-hint">Each ring is one step further from the original error</span>
+     <span class="blast-key is-seed"><i></i>Original error</span>
+     <span class="blast-key is-affected"><i></i>Affected (${counts.affected})</span>
+     <span class="blast-key is-repaired"><i></i>Rebuilt (${counts.repaired})</span>
+     <span class="blast-key is-held"><i></i>Held (${counts.held})</span>`;
+}
+
+/* ================= COMPLIANCE & REVIEW =================
+ * Two duties, one desk: prove nothing clinical crossed a boundary it should
+ * not have, and decide the records the system refused to guess at. The data
+ * boundary is drawn as a literal wall so the claim is checkable by eye.
+ */
+function initAssuranceView() {
+  if (!STATE.assuranceReady) {
+    STATE.assuranceReady = true;
+    $("assurance-tabs").addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-panel]");
+      if (btn) showAssurancePanel(btn.dataset.panel);
+    });
+    $("btn-assurance-queue-refresh").addEventListener("click", loadAssuranceQueue);
+    $("btn-assurance-trail-refresh").addEventListener("click", loadAssuranceTrail);
+    $("btn-assurance-privacy").addEventListener("click", runAssurancePrivacy);
+  }
+  renderBoundary();
+  loadAssuranceQueue();
+  renderAssuranceRollup();
+}
+
+function showAssurancePanel(name) {
+  document.querySelectorAll("#assurance-tabs button").forEach((b) =>
+    b.classList.toggle("active", b.dataset.panel === name));
+  document.querySelectorAll(".assurance-panel").forEach((p) =>
+    p.classList.toggle("active", p.id === `assurance-${name}`));
+  if (name === "trail") loadAssuranceTrail();
+  if (name === "queue") loadAssuranceQueue();
+}
+
+async function renderAssuranceRollup() {
+  try {
+    const q = await api("/api/review/queue");
+    const rec = STATE.lastRecovery;
+    const exported = rec ? "none" : "—";
+    $("assurance-rollup").innerHTML =
+      `<div class="rollup ${q.count ? "is-alert" : "is-calm"}">
+         <div class="rollup-figure">${q.count}</div>
+         <div class="rollup-copy">
+           <strong>${q.count === 1 ? "record needs a decision" : "records need a decision"}</strong>
+           <span>Clinical content exported: ${esc(exported)}</span>
+         </div>
+       </div>`;
+  } catch (e) { $("assurance-rollup").innerHTML = ""; }
+}
+
+/* The wall: what stays inside a runtime vs the fields that cross. */
+const NEVER_LEAVES = [
+  "Patient name", "MRN", "Date of birth", "Clinical notes",
+  "Laboratory values", "Diagnoses", "Model hidden state", "KV cache",
+];
+
+/* The capsule schema, as the released-field audit reports it. The dashboard's
+ * /api/recover projection deliberately reports sketch_dim and
+ * support_token_count instead of the sketch and tokens themselves, so it must
+ * NOT be used to describe the boundary - that would overstate what crosses and
+ * disagree with the recovery certificate. */
+const RELEASED_FIELDS = [
+  "artifact_type_band", "capsule_id", "expires_at", "incident_id", "issued_at",
+  "issuer", "nonce", "patient_token", "purpose", "recipient",
+  "seed_commitment", "sketch", "support_tokens", "time_band",
+];
+
+function renderBoundary() {
+  const rec = STATE.lastRecovery;
+
+  $("boundary-diagram").innerHTML =
+    `<div class="boundary">
+       <div class="boundary-side inside">
+         <div class="boundary-head">
+           <span class="boundary-tag good">Stays inside the runtime</span>
+           <strong>${NEVER_LEAVES.length} kinds of clinical content</strong>
+         </div>
+         <ul>${NEVER_LEAVES.map((f) =>
+           `<li><span aria-hidden="true">■</span>${esc(f)}</li>`).join("")}</ul>
+       </div>
+       <div class="boundary-wall" aria-hidden="true">
+         <span class="boundary-wall-label">POLICY BOUNDARY</span>
+       </div>
+       <div class="boundary-side outside">
+         <div class="boundary-head">
+           <span class="boundary-tag accent">Crosses to the coordinator</span>
+           <strong>${RELEASED_FIELDS.length} metadata fields</strong>
+         </div>
+         <ul>${RELEASED_FIELDS.map((f) =>
+           `<li><span aria-hidden="true">□</span>${esc(f.replace(/_/g, " "))}</li>`).join("")}</ul>
+       </div>
+     </div>`;
+
+  const out = $("boundary-detail");
+  out.innerHTML = "";
+  out.appendChild(el("div", "notice good",
+    `<b>No clinical content has a field to travel in.</b> The capsule schema defines
+     ${RELEASED_FIELDS.length} fields; none of them carries a name, an identifier, a
+     note, or a measured value. Each capsule additionally carries a signature that
+     binds these fields, and nothing else.`));
+
+  if (!rec) {
+    out.appendChild(el("p", "small muted",
+      "Showing the declared schema. Run a recovery from Incident Command to audit " +
+      "the capsules actually issued in this session."));
+    return;
+  }
+
+  const bytes = rec.capsules.reduce((sum, c) => sum + (c.size_bytes || 0), 0);
+  out.appendChild(el("div", "notice info",
+    `<b>${esc(rec.capsules.length)} capsule(s) issued in this session</b>,
+     ${esc(bytes)} bytes of metadata in total. The recovery certificate lists the
+     same ${RELEASED_FIELDS.length} fields.`));
+  out.appendChild(el("h4", "record-section", "Capsules issued this session"));
+  out.appendChild(table(rec.capsules.slice(0, 12), [
+    { key: "recipient", label: "Sent to" },
+    { key: "purpose", label: "Purpose" },
+    { key: "patient_token", label: "Patient token",
+      render: (c) => `<span class="mono">${esc(String(c.patient_token).slice(0, 16))}…</span>` },
+    { key: "artifact_type_band", label: "Type band" },
+    { key: "size_bytes", label: "Bytes", num: true },
+  ]));
+  out.appendChild(el("p", "small muted",
+    "The sketch and support tokens are counted, never displayed — the dashboard " +
+    "sees a dimension and a count, not the values."));
+}
+
+async function loadAssuranceQueue() {
+  const out = $("assurance-queue-result");
+  out.innerHTML = '<div class="loading-row"><span class="spinner"></span>Loading queue…</div>';
+  try {
+    const r = await api("/api/review/queue");
+    out.innerHTML = "";
+    if (!r.count) {
+      out.appendChild(el("div", "empty-teach",
+        `<strong>Nothing is waiting on you.</strong>
+         <span>The system only escalates a record when it cannot rebuild it safely.
+           An empty queue means every affected record was either rebuilt from source
+           data or confirmed unaffected.</span>`));
+      renderAssuranceRollup();
+      return;
+    }
+    r.items.forEach((item) => {
+      const card = el("div", "queue-card");
+      card.innerHTML =
+        `<div class="queue-head">
+           <div>
+             <strong>${esc(String(item.memory_id))}</strong>
+             <span class="mono muted">v${esc(item.version)}</span>
+           </div>
+           <span class="badge quarantined">${esc(t("quarantined", "held"))}</span>
+         </div>
+         <div class="queue-reason">
+           <span aria-hidden="true">!</span>
+           ${esc(item.quarantine_reason || "Could not be rebuilt safely.")}
+         </div>
+         <details><summary>Show the record content</summary>
+           <pre class="cert">${esc(item.content)}</pre></details>`;
+      const row = el("div", "queue-actions");
+      [["approve", "Approve", "good"], ["reject", "Reject", "danger"],
+       ["keep_quarantined", "Keep held", "ghost"]].forEach(([decision, label, kind]) => {
+        const b = el("button", `btn small ${kind === "danger" ? "danger" : "ghost"}`, esc(label));
+        b.addEventListener("click", async () => {
+          try {
+            await api("/api/review", {
+              method: "POST",
+              body: JSON.stringify({
+                memory_key: `${item.memory_id}@v${item.version}`, decision }),
+            });
+            toast(`Recorded: ${label.toLowerCase()}`, { detail: item.memory_id, kind: "good" });
+          } catch (err) {
+            toast("Decision failed", { detail: err.message, kind: "bad" });
+          }
+          loadAssuranceQueue();
+        });
+        row.appendChild(b);
+      });
+      card.appendChild(row);
+      out.appendChild(card);
+    });
+    renderAssuranceRollup();
+  } catch (e) {
+    out.innerHTML = `<div class="notice bad">${esc(e.message)}</div>`;
+  }
+}
+
+async function runAssurancePrivacy() {
+  const sel = $("as-incident");
+  const incident_id = sel.value;
+  const out = $("assurance-privacy-result");
+  if (!incident_id) {
+    out.innerHTML = `<div class="empty-teach"><strong>No incident to test.</strong>
+      <span>A safety officer must run a recovery before the interface can be attacked.</span></div>`;
+    return;
+  }
+  const btn = $("btn-assurance-privacy");
+  btn.disabled = true;
+  out.innerHTML = '<div class="loading-row"><span class="spinner"></span>Attacking our own interface…</div>';
+  try {
+    const r = await api(`/api/privacy/${encodeURIComponent(incident_id)}`);
+    out.innerHTML = "";
+    const attacks = ["attribute_gender", "attribute_restricted", "membership", "linkability"]
+      .map((k) => r[k]).filter(Boolean);
+    out.appendChild(table(attacks, [
+      { key: "name", label: "Test", wrap: true },
+      { key: "accuracy", label: "Attack result", num: true, render: (a) => fmt(a.accuracy) },
+      { key: "baseline", label: "Guessing", num: true, render: (a) => fmt(a.baseline) },
+      { key: "verdict", label: "Verdict",
+        render: (a) => a.advantage > 0.05
+          ? `<span class="badge suspected">learns something</span>`
+          : `<span class="badge active">no better than chance</span>` },
+    ]));
+    const mem = r.membership || {};
+    if (mem.advantage > 0.05) {
+      out.appendChild(el("div", "notice warn",
+        `<b>One test does learn something, and we report it.</b> An attacker holding a
+         capsule can tell better than chance whether a record was in the candidate set
+         (${fmt(mem.accuracy)} against ${fmt(mem.baseline)} guessing). The claim this
+         system makes is narrower: raw clinical content is never exported. The field
+         audit on the Data boundary tab is the evidence for that claim.`));
+    }
+    const rf = r.released_fields || {};
+    out.appendChild(el("div", rf.raw_content_exported ? "notice bad" : "notice good",
+      `Clinical content exported through the recovery interface:
+       <b>${rf.raw_content_exported ? "YES" : "NONE"}</b>
+       (${esc(rf.capsules)} capsules, ${esc(rf.total_bytes)} bytes of metadata).`));
+  } catch (e) {
+    out.innerHTML = `<div class="notice bad">${esc(e.message)}</div>`;
+  } finally { btn.disabled = false; }
+}
+
+async function loadAssuranceTrail() {
+  const log = $("assurance-log");
+  try {
+    const r = await api("/api/events?limit=300");
+    log.innerHTML = "";
+    if (!r.events.length) {
+      log.innerHTML = '<span class="muted">No events recorded yet.</span>';
+      return;
+    }
+    r.events.forEach((e) => {
+      log.appendChild(el("div", "row",
+        `<span class="muted">${esc(String(e.at).slice(11, 23))}</span>
+         <span class="actor">${esc(e.actor)}</span>
+         <span class="kind">${esc(e.kind)}</span>
+         <span class="subject">${esc(e.subject ?? "")}</span>`));
+    });
+  } catch (e) {
+    log.innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`;
+  }
+}
+
+/* ================= GUIDED TOUR =================
+ * Coach marks on the real interface, not a separate slideshow, and only on a
+ * role's first visit. Replayable from the header, dismissible at any point.
+ */
+const TOURS = {
+  clinician: [
+    ["#records-rollup", "Start here",
+     "This tells you immediately whether any of your patients need attention. If it reads zero, nothing about your patients was affected."],
+    ["#records-list", "Your patients",
+     "Anything needing attention is sorted to the top. The label on each row is the plain answer: corrected, being checked, or no issues."],
+    ["#records-detail", "What actually changed",
+     "Open a patient to see the old text beside the new one. If a record was filed under the wrong patient, that is called out explicitly."],
+  ],
+  safety: [
+    ["#command-status", "Containment status",
+     "One line telling you whether an incident is open and whether it has been contained."],
+    [".command-setup", "Report and respond",
+     "In production this is triggered by a reported error. Report one here, then start recovery to watch the four stages run."],
+    ["#blast-radius", "The blast radius",
+     "Each ring is one hop away from the original mistake. Red is still affected, teal has been rebuilt, amber is held for a human."],
+  ],
+  compliance: [
+    ["#assurance-tabs", "Two duties, one desk",
+     "Audit what crossed the boundary, clear the review queue, run the leakage tests, and read the audit trail."],
+    ["#boundary-diagram", "The boundary",
+     "Left of the wall never leaves the runtime. Right of the wall is everything the coordinator received - metadata only."],
+    ["#assurance-rollup", "What needs you",
+     "The count is records the system refused to guess at. Those are the ones that need a human decision."],
+  ],
+  researcher: [
+    ["#tabs", "The full console",
+     "Every research surface: paired baselines, the provenance matrix, privacy attacks, and the hash-bound evidence package."],
+  ],
+};
+
+const TOUR_KEY = "aegis-tours-seen";
+function seenTours() {
+  try { return JSON.parse(localStorage.getItem(TOUR_KEY) || "[]"); }
+  catch (e) { return []; }
+}
+function markTourSeen(id) {
+  try {
+    const seen = new Set(seenTours());
+    seen.add(id);
+    localStorage.setItem(TOUR_KEY, JSON.stringify([...seen]));
+  } catch (e) { /* storage blocked */ }
+}
+
+const TOUR = { steps: [], at: 0, id: null };
+
+function startTour(id, { force = false } = {}) {
+  const steps = TOURS[id];
+  if (!steps || (!force && seenTours().includes(id))) return;
+  TOUR.steps = steps;
+  TOUR.at = 0;
+  TOUR.id = id;
+  // Let the role's views paint before anchoring to them.
+  window.setTimeout(() => showTourStep(), 650);
+}
+
+function showTourStep() {
+  const step = TOUR.steps[TOUR.at];
+  if (!step) return endTour();
+  const [selector, title, body] = step;
+  const target = document.querySelector(selector);
+  if (!target) { TOUR.at += 1; return showTourStep(); }
+
+  document.querySelectorAll(".coach-target").forEach((n) =>
+    n.classList.remove("coach-target"));
+  target.classList.add("coach-target");
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
+
+  $("coach-step").textContent = `${TOUR.at + 1} of ${TOUR.steps.length}`;
+  $("coach-title").textContent = title;
+  $("coach-body").textContent = body;
+  $("coach-next").textContent =
+    TOUR.at === TOUR.steps.length - 1 ? "Got it" : "Next";
+  $("coach").hidden = false;
+
+  // Park the card near the target without covering it.
+  window.setTimeout(() => {
+    const card = $("coach-card");
+    const box = target.getBoundingClientRect();
+    const below = box.bottom + 18;
+    const fits = below + card.offsetHeight < window.innerHeight - 12;
+    card.style.top = `${fits ? below : Math.max(12, box.top - card.offsetHeight - 18)}px`;
+    card.style.left = `${Math.min(
+      Math.max(16, box.left),
+      window.innerWidth - card.offsetWidth - 16)}px`;
+  }, 320);
+}
+
+function endTour() {
+  $("coach").hidden = true;
+  document.querySelectorAll(".coach-target").forEach((n) =>
+    n.classList.remove("coach-target"));
+  if (TOUR.id) markTourSeen(TOUR.id);
+}
+
+function initTour() {
+  $("coach-next").addEventListener("click", () => { TOUR.at += 1; showTourStep(); });
+  $("coach-skip").addEventListener("click", endTour);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !$("coach").hidden) endTour();
+  });
+}
