@@ -379,6 +379,7 @@ function selectRole(id, { firstRun = false } = {}) {
   renderRoleSurface();
   if (document.getElementById("chat-suggestions")) renderSuggestions();
   if (document.getElementById("operator-context-title")) updateOperatorContext();
+  if (document.getElementById("operator-case-list")) loadOperatorCases();
   if (firstRun) {
     startTour(id);
     // The operator is the primary way into a role workflow, so introduce it
@@ -872,6 +873,10 @@ async function refreshIncidents() {
   STATE.system = await api("/api/system");
   renderOverview();
   if (currentRole() === "clinician") loadPatients();
+  // Incident and recovery actions can start from either the dashboard or the
+  // Operator. Keep the shared case inbox coherent no matter which surface was
+  // used, instead of only refreshing it after a chat response.
+  if (currentRole()) await loadOperatorCases();
 }
 
 $("btn-create").addEventListener("click", async () => {
@@ -2498,13 +2503,13 @@ const CHAT = {
 };
 
 const CHAT_SUGGESTIONS = {
-  clinician: ["Which patients need attention?", "What changed for Devraj?",
+  clinician: ["Show the case inbox", "Which patients need attention?",
               "What does 'corrected' mean?"],
-  safety: ["We registered the wrong patient", "Run the recovery",
+  safety: ["Show the case inbox", "We registered the wrong patient",
            "How far did it spread?"],
-  compliance: ["Did any data leave a runtime?", "What's waiting for me?",
+  compliance: ["Show the case inbox", "What's waiting for me?",
                "Run the leakage tests"],
-  researcher: ["We registered the wrong patient", "Run the recovery",
+  researcher: ["Show the case inbox", "We registered the wrong patient",
                "What is benign-state retention?"],
 };
 
@@ -2519,12 +2524,24 @@ function initChat() {
     const chip = e.target.closest("button[data-say]");
     if (chip) sendChat(chip.dataset.say);
   });
+  $("operator-inbox-toggle").addEventListener("click", () => {
+    const inbox = $("operator-inbox");
+    inbox.hidden = !inbox.hidden;
+    $("operator-inbox-toggle").setAttribute("aria-expanded", inbox.hidden ? "false" : "true");
+    if (!inbox.hidden) loadOperatorCases();
+  });
+  $("operator-inbox-refresh").addEventListener("click", loadOperatorCases);
+  $("operator-case-list").addEventListener("click", (e) => {
+    const card = e.target.closest("button[data-case-id]");
+    if (card) sendChat(`open case ${card.dataset.caseId}`);
+  });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && CHAT.open) toggleChat(false);
   });
   renderSuggestions();
   refreshChatBudget();
   primeChat();
+  loadOperatorCases();
   updateOperatorContext();
   if ($("role-gate").hidden) toggleChat(true);
 }
@@ -2609,6 +2626,43 @@ function renderChatPlan(plan) {
   $("chat-log").scrollTop = $("chat-log").scrollHeight;
 }
 
+function renderCaseBrief(caseData) {
+  const card = el("article", "operator-case-brief");
+  card.innerHTML =
+    `<div class="operator-plan-kicker">Case timeline</div>
+     <div class="operator-case-brief-head"><div><strong>${esc(caseData.title)}</strong>
+       <span>${esc(caseData.case_id)}</span></div>
+       <b class="operator-case-status">${esc(caseData.status.replace(/_/g, " "))}</b></div>
+     <p>${esc(caseData.next_action)}</p>
+     <ol>${(caseData.timeline || []).map((event) =>
+       `<li><i class="is-${esc(event.stage)}"></i><span><b>${esc(event.label)}</b>` +
+       `<small>${esc(event.actor)} · ${esc(String(event.at || "").slice(11, 19))}</small></span></li>`
+     ).join("")}</ol>`;
+  $("chat-log").appendChild(card);
+  $("chat-log").scrollTop = $("chat-log").scrollHeight;
+}
+
+async function loadOperatorCases() {
+  const host = $("operator-case-list");
+  if (!host) return;
+  try {
+    const data = await api(`/api/cases?role=${encodeURIComponent(currentRole())}`);
+    $("operator-inbox-count").textContent = data.attention || data.count || 0;
+    if (!data.cases.length) {
+      host.innerHTML = '<div class="operator-case-empty">No cases are open. The workspace is clear.</div>';
+      return;
+    }
+    host.innerHTML = data.cases.map((item) =>
+      `<button class="operator-case is-${esc(item.status)}" type="button" data-case-id="${esc(item.case_id)}">
+         <span><strong>${esc(item.title)}</strong><span class="operator-case-id">${esc(item.case_id)} · owner ${esc(item.owner)}</span></span>
+         <b class="operator-case-status">${esc(item.status.replace(/_/g, " "))}</b>
+         <span class="operator-case-next">${esc(item.next_action)}</span>
+       </button>`).join("");
+  } catch (e) {
+    host.innerHTML = `<div class="operator-case-empty">Case inbox unavailable: ${esc(e.message)}</div>`;
+  }
+}
+
 function settlePendingPlan(label, kind) {
   const cards = $("chat-log").querySelectorAll(".operator-plan:not(.is-settled)");
   const card = cards[cards.length - 1];
@@ -2667,6 +2721,7 @@ async function sendChat(message) {
     const badge = r.source.startsWith("model") ? "interpreted by Gemini" : "answered locally";
     const bubble = chatBubble(r.reply || "Done.", "bot", badge);
     if (r.plan) renderChatPlan(r.plan);
+    if (r.case) renderCaseBrief(r.case);
     // A multi-step action shows its working, so the user sees what was done on
     // their behalf rather than being told it happened.
     if (r.steps?.length) renderChatSteps(bubble, r.steps);
@@ -2674,6 +2729,7 @@ async function sendChat(message) {
     renderChatNext(r.suggestions || []);
     updateOperatorContext(r);
     if (r.budget) renderChatBudget(r.budget);
+    loadOperatorCases();
   } catch (e) {
     thinking.remove();
     chatBubble(`Something went wrong: ${e.message}`, "bot", "error");

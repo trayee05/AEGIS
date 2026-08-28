@@ -72,6 +72,27 @@ ACTIONS: Tuple[Action, ...] = (
         keywords=("blast", "radius", "spread", "affected", "impact", "far"),
     ),
     Action(
+        name="list_cases",
+        summary="Open the case inbox and brief the user on work needing attention.",
+        roles=("any",),
+        patterns=(
+            r"\b(case\s+inbox|list\s+(the\s+)?cases|show\s+(me\s+)?(the\s+)?cases)\b",
+            r"\b(which|what)\s+cases?\s+(need|needs|require|requires)\s+attention\b",
+        ),
+        keywords=("case", "cases", "inbox", "worklist"),
+    ),
+    Action(
+        name="show_case",
+        summary="Open one incident case and explain its status, owner, timeline, and next action.",
+        roles=("any",),
+        params={"case_id": "case identifier such as INC-F1-T-ID-01"},
+        patterns=(
+            r"\b(open|show|brief|explain)\s+(me\s+)?(case|incident)\b",
+            r"\bcase\s+inc-[a-z0-9-]+\b",
+        ),
+        keywords=("case", "incident", "open", "brief", "timeline"),
+    ),
+    Action(
         name="system_status",
         summary="Report what is happening right now: open incidents, affected records, what needs a person.",
         roles=("any",),
@@ -388,6 +409,10 @@ def extract_params(action_name: str, text: str) -> Dict[str, Any]:
         mrn = re.search(r"\b(mrn\s*\w+|s\d{3,})\b", text)
         if mrn:
             params["patient"] = mrn.group(1).replace(" ", "").upper()
+    elif action_name == "show_case":
+        case_id = re.search(r"\binc-[a-z0-9-]+\b", text)
+        if case_id:
+            params["case_id"] = case_id.group(0).upper()
     elif action_name == "explain":
         params["topic"] = text.strip()
     return params

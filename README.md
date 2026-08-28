@@ -65,7 +65,7 @@ python -m aegis_care.cli privacy       # empirical leakage attacks on our own in
 python -m aegis_care.cli experiment    # the full paired matrix -> results/
 python -m aegis_care.cli external-validate --fhir synthea_fhir.zip  # external-format proof
 python -m aegis_care.cli serve         # dashboard at http://127.0.0.1:8000
-pytest -q                              # 220 tests
+pytest -q                              # 225 tests
 
 python scripts/check_reproducible.py               # committed results must re-run identically
 python scripts/reseal_evidence.py results/external_validation --dry-run
@@ -340,6 +340,8 @@ retention meaningful rather than decorative.
 - **Review Queue** — approve / reject / keep-quarantined for escalated artifacts
 - **Experiments** — the full matrix, writing tables, figures, and the report
 - **Audit Log** — the append-only event ledger
+- **Operator case inbox** — a role-aware queue that turns incidents, recovery progress,
+  review state, and safe-resume decisions into one continuous clinical case
 
 The console is keyboard-navigable (arrow keys move between sections, `Home`/`End` jump to
 the ends, and a skip link precedes the header), deep-linkable (`/#graph`, `/#evidence`, …),
@@ -356,6 +358,12 @@ Every role's console can be driven in plain language. Say *"yes I accidentally
 registered the wrong patient"* and the console logs the incident, opens Incident
 Command, and draws the blast radius; say *"run the recovery"* and it runs the
 CARE loop and reports the measured outcome.
+
+The Operator is also the front door to a longitudinal case workflow. Ask it to
+*"show the case inbox"* or *"open case INC-…"* and it presents the current owner,
+attention state, next safe action, affected/held/repaired counts, and a timestamped
+timeline derived from the append-only ledger. The same case automatically moves from
+open incident, through review when required, to contained and safe to resume.
 
 **The model never produces data.** It only chooses one action from a fixed
 catalogue and fills its parameters. Every number the assistant says back is
@@ -397,7 +405,7 @@ locally and asks you to rephrase otherwise.
 
 ## Verification
 
-`pytest -q` runs 220 tests. Beyond ordinary unit coverage, each of the six **core invariants**
+`pytest -q` runs 225 tests. Beyond ordinary unit coverage, each of the six **core invariants**
 of proposal Section 7.1 and each termination/safety property of Section 6.6 has an
 executable check in [`tests/test_invariants.py`](tests/test_invariants.py):
 

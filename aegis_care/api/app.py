@@ -493,6 +493,12 @@ def create_incident(req: IncidentRequest) -> Dict[str, Any]:
         state.incidents[incident.incident_id] = incident
         state.snapshots[incident.incident_id] = env.snapshot()
         state.masks[incident.incident_id] = mask
+        env.ledger.log_event(
+            incident.incident_id, "safety", "incident_reported", incident.seed_key,
+            {"family": incident.family,
+             "affected": len(incident.true_contaminated),
+             "provenance": req.provenance},
+        )
 
     return _incident_payload(incident, mask)
 
@@ -510,6 +516,89 @@ def get_incident(incident_id: str) -> Dict[str, Any]:
     if incident is None:
         raise HTTPException(404, f"incident {incident_id} not found")
     return _incident_payload(incident, state.masks.get(incident_id), detailed=True)
+
+
+CASE_EVENT_LABELS = {
+    "incident_reported": ("reported", "Incident reported"),
+    "recovery_started": ("working", "Containment started"),
+    "recompiled": ("working", "Record rebuilt from trusted source"),
+    "quarantined": ("review", "Record held for human review"),
+    "enforcement_armed": ("working", "Withdrawn versions blocked"),
+    "recovery_complete": ("verified", "Recovery verification completed"),
+    "review_decision": ("verified", "Human review decision recorded"),
+}
+
+
+def _case_payload(incident: Incident, role: str = "researcher",
+                  include_timeline: bool = False) -> Dict[str, Any]:
+    """Project technical incident state into one user-facing case."""
+    result = state.recoveries.get(incident.incident_id)
+    quarantined = len(result.quarantined) if result else 0
+    safe_resume = bool(result and result.certificate and result.certificate.safe_resume)
+    if result and (quarantined or not safe_resume):
+        status, owner = "review_required", "compliance"
+        next_action = "Review the records AEGIS refused to rebuild automatically"
+    elif result:
+        status, owner = "contained", "clinician"
+        next_action = "Verify the corrected patient record before relying on it"
+    else:
+        status, owner = "open", "safety"
+        next_action = "Review the proposed containment plan and start recovery"
+
+    events_for_case = list(reversed(
+        state.env.ledger.events(incident.incident_id, limit=300)))
+    created_at = events_for_case[0]["at"] if events_for_case else None
+    updated_at = events_for_case[-1]["at"] if events_for_case else created_at
+    payload: Dict[str, Any] = {
+        "case_id": incident.incident_id,
+        "title": FAMILY_INFO[incident.family]["name"],
+        "family": incident.family,
+        "status": status,
+        "owner": owner,
+        "attention": role in (owner, "researcher"),
+        "affected_records": len(incident.true_contaminated),
+        "repaired_records": len(result.repaired) if result else 0,
+        "held_records": quarantined,
+        "safe_resume": safe_resume,
+        "next_action": next_action,
+        "created_at": created_at,
+        "updated_at": updated_at,
+    }
+    if include_timeline:
+        timeline = []
+        for event in events_for_case:
+            display = CASE_EVENT_LABELS.get(event["kind"])
+            if not display:
+                continue
+            stage, label = display
+            timeline.append({
+                "at": event["at"], "stage": stage, "label": label,
+                "actor": event["actor"], "kind": event["kind"],
+                "subject": event.get("subject"), "detail": event.get("detail", {}),
+            })
+        payload["timeline"] = timeline
+    return payload
+
+
+@app.get("/api/cases")
+def list_cases(role: str = "researcher") -> Dict[str, Any]:
+    if role not in {"clinician", "safety", "compliance", "researcher"}:
+        role = "researcher"
+    rows = [_case_payload(incident, role) for incident in state.incidents.values()]
+    priority = {"open": 0, "review_required": 1, "contained": 2}
+    rows.sort(key=lambda row: (not row["attention"], priority[row["status"]],
+                               row["updated_at"] or ""))
+    return {"count": len(rows),
+            "attention": sum(1 for row in rows if row["attention"]),
+            "cases": rows}
+
+
+@app.get("/api/cases/{case_id}")
+def get_case(case_id: str, role: str = "researcher") -> Dict[str, Any]:
+    incident = state.incidents.get(case_id)
+    if incident is None:
+        raise HTTPException(404, f"case {case_id} not found")
+    return _case_payload(incident, role, include_timeline=True)
 
 
 def _incident_payload(incident: Incident, mask=None,
@@ -1147,6 +1236,11 @@ def assistant(req: AssistantRequest) -> Dict[str, Any]:
                 state.snapshots[incident.incident_id] = env.snapshot()
                 mask = ProvenanceMask(env, CONFIG.seed).apply(provenance)
                 state.masks[incident.incident_id] = mask
+                env.ledger.log_event(
+                    incident.incident_id, "safety", "incident_reported",
+                    incident.seed_key, {"family": family,
+                                        "affected": len(incident.true_contaminated),
+                                        "provenance": provenance})
             out["ui"] = {"role": "safety", "view": "command",
                          "incident_id": incident.incident_id, "refresh": True}
             out["reply"] = (
@@ -1185,6 +1279,44 @@ def assistant(req: AssistantRequest) -> Dict[str, Any]:
                 out["reply"] = (
                     f"The error reached {len(incident.true_contaminated)} record(s) "
                     f"across {incident.depth} hop(s). The rings show how far.")
+
+        elif action == "list_cases":
+            cases = list_cases(req.role)
+            out["cases"] = cases["cases"]
+            if not cases["count"]:
+                out["reply"] = "The case inbox is clear. No incidents have been reported."
+            elif cases["attention"]:
+                lead = next(row for row in cases["cases"] if row["attention"])
+                out["reply"] = (
+                    f"{cases['count']} case(s) in the inbox; {cases['attention']} need "
+                    f"the {req.role} role. {lead['case_id']} is {lead['status'].replace('_', ' ')}. "
+                    f"Next: {lead['next_action']}.")
+            else:
+                out["reply"] = (f"{cases['count']} case(s) are visible, but none are "
+                                f"waiting on the {req.role} role.")
+
+        elif action == "show_case":
+            case_id = str(params.get("case_id") or "")
+            if not case_id and state.incidents:
+                case_id = next(reversed(state.incidents))
+            if not case_id or case_id not in state.incidents:
+                out["reply"] = "I could not find that case. Ask me to show the case inbox."
+            else:
+                case = get_case(case_id, req.role)
+                out["case"] = case
+                if case["status"] == "open":
+                    out["ui"] = {"role": "safety", "view": "command",
+                                 "incident_id": case_id}
+                elif case["status"] == "review_required":
+                    out["ui"] = {"role": "compliance", "view": "assurance",
+                                 "panel": "queue"}
+                else:
+                    out["ui"] = {"role": "clinician", "view": "records"}
+                out["reply"] = (
+                    f"{case['case_id']}: {case['title']} is "
+                    f"{case['status'].replace('_', ' ')}. Owner: {case['owner']}. "
+                    f"{case['affected_records']} affected, {case['repaired_records']} rebuilt, "
+                    f"{case['held_records']} held. Next: {case['next_action']}.")
 
         elif action == "list_patients":
             data = list_patients()
@@ -1309,6 +1441,11 @@ def assistant(req: AssistantRequest) -> Dict[str, Any]:
                 state.snapshots[incident.incident_id] = env.snapshot()
                 mask = ProvenanceMask(env, CONFIG.seed).apply(provenance)
                 state.masks[incident.incident_id] = mask
+                env.ledger.log_event(
+                    incident.incident_id, "safety", "incident_reported",
+                    incident.seed_key, {"family": family,
+                                        "affected": len(incident.true_contaminated),
+                                        "provenance": provenance})
             result = recover(RecoveryRequest(incident_id=incident.incident_id))
             metrics = result.get("metrics", {})
             cert = result.get("certificate", {})

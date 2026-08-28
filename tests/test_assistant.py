@@ -38,6 +38,8 @@ class TestLocalRouting:
         ("run the recovery", "safety", "run_recovery"),
         ("contain it", "safety", "run_recovery"),
         ("how far did it spread", "safety", "show_blast_radius"),
+        ("show the case inbox", "safety", "list_cases"),
+        ("open case INC-F1-T-ID-01", "safety", "show_case"),
         ("which patients need my attention", "clinician", "list_patients"),
         ("list all patients", "clinician", "list_patients"),
         ("did any data leak", "compliance", "show_boundary"),
@@ -334,6 +336,46 @@ class TestAgenticBehaviour:
         assert refused["action"] == "none"
         assert "not something the clinician role can do" in refused["reply"]
         assert refused["state"]["open_incidents"] == 1
+
+    def test_case_inbox_tracks_the_recovery_lifecycle(self, client):
+        empty = client.get("/api/cases?role=safety").json()
+        assert empty == {"count": 0, "attention": 0, "cases": []}
+
+        reported = client.post("/api/assistant", json={
+            "message": "we registered the wrong patient", "role": "safety"}).json()
+        case_id = reported["ui"]["incident_id"]
+        open_case = client.get(f"/api/cases/{case_id}?role=safety").json()
+        assert open_case["status"] == "open"
+        assert open_case["owner"] == "safety"
+        assert open_case["timeline"][0]["kind"] == "incident_reported"
+
+        client.post("/api/assistant", json={
+            "message": "run recovery", "role": "safety"})
+        client.post("/api/assistant", json={"message": "yes", "role": "safety"})
+        closed = client.get(f"/api/cases/{case_id}?role=clinician").json()
+        assert closed["status"] == "contained"
+        assert closed["owner"] == "clinician"
+        assert closed["safe_resume"] is True
+        assert closed["timeline"][-1]["kind"] == "recovery_complete"
+
+    def test_operator_can_open_and_brief_a_case(self, client):
+        reported = client.post("/api/assistant", json={
+            "message": "we registered the wrong patient", "role": "safety"}).json()
+        case_id = reported["ui"]["incident_id"]
+        body = client.post("/api/assistant", json={
+            "message": f"open case {case_id}", "role": "safety"}).json()
+        assert body["action"] == "show_case"
+        assert body["case"]["case_id"] == case_id
+        assert body["case"]["timeline"]
+        assert body["ui"]["view"] == "command"
+
+    def test_case_inbox_is_role_aware(self, client):
+        client.post("/api/assistant", json={
+            "message": "we registered the wrong patient", "role": "safety"})
+        safety = client.get("/api/cases?role=safety").json()
+        clinician = client.get("/api/cases?role=clinician").json()
+        assert safety["attention"] == 1
+        assert clinician["attention"] == 0
 
     def test_state_is_reported_with_every_reply(self, client):
         body = client.post("/api/assistant", json={

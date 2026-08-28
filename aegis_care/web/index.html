@@ -553,9 +553,22 @@
     <button class="chat-close" id="chat-close" type="button" aria-label="Close operator">&times;</button>
   </header>
   <div class="operator-context" aria-live="polite">
-    <span>ACTIVE WORKSPACE</span>
-    <strong id="operator-context-title">System briefing</strong>
-    <small id="operator-context-state">Standing by · no action in progress</small>
+    <div class="operator-context-copy">
+      <span>ACTIVE WORKSPACE</span>
+      <strong id="operator-context-title">System briefing</strong>
+      <small id="operator-context-state">Standing by · no action in progress</small>
+    </div>
+    <button class="operator-inbox-toggle" id="operator-inbox-toggle" type="button"
+            aria-expanded="false" aria-controls="operator-inbox">
+      Cases <b id="operator-inbox-count">0</b>
+    </button>
+  </div>
+  <div class="operator-inbox" id="operator-inbox" hidden>
+    <div class="operator-inbox-head">
+      <div><span>CASE INBOX</span><strong>Work requiring attention</strong></div>
+      <button type="button" id="operator-inbox-refresh">Refresh</button>
+    </div>
+    <div id="operator-case-list"></div>
   </div>
   <div class="chat-log" id="chat-log" role="log" aria-live="polite">
     <div class="chat-msg is-bot">

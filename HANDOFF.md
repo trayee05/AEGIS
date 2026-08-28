@@ -32,7 +32,7 @@ python -m venv .venv
 pip install -r requirements.txt
 
 python -m aegis_care.cli serve    # dashboard at http://127.0.0.1:8000
-pytest -q                         # 217 tests
+pytest -q                         # 225 tests
 ```
 
 Python ≥3.10. No GPU, Docker, network, or model download required — the default
@@ -303,7 +303,7 @@ own wording can never bill a token.
 ## Testing
 
 ```
-220 passed, 1 skipped
+225 passed, 1 skipped
 ```
 
 New suites worth knowing about:
@@ -317,6 +317,7 @@ New suites worth knowing about:
 | `TestRoleSafety` | A rogue model response cannot exceed a role |
 | `TestSuiteSpendsNothing` | `pytest` cannot bill a live API key |
 | `TestAgenticBehaviour` | Explanations never contain model filler |
+| Case inbox lifecycle tests | Incidents, recovery, ownership, and role-aware case briefs remain coherent |
 
 CI (`.github/workflows/ci.yml`) runs the suite on Linux and Windows across
 Python 3.10 and 3.12, plus a reproducibility job.
