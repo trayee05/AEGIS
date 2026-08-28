@@ -538,29 +538,37 @@
 <button class="chat-toggle" id="chat-toggle" type="button"
         aria-expanded="false" aria-controls="chat-panel">
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-10.9 6.7L4 19.5l1.4-4.6A7.5 7.5 0 1 1 20 11.5z"/></svg>
-  <span>Ask</span>
+  <span>Operator</span>
 </button>
 
-<section class="chat-panel" id="chat-panel" hidden aria-label="Assistant">
+<section class="chat-panel" id="chat-panel" hidden aria-label="AEGIS Operator">
   <header class="chat-head">
-    <div>
-      <strong>Assistant</strong>
-      <span id="chat-budget">Answering locally</span>
+    <div class="operator-identity">
+      <span class="operator-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <div>
+        <strong>AEGIS Operator</strong>
+        <span id="chat-budget">Grounded in live system state</span>
+      </div>
     </div>
-    <button class="chat-close" id="chat-close" type="button" aria-label="Close assistant">&times;</button>
+    <button class="chat-close" id="chat-close" type="button" aria-label="Close operator">&times;</button>
   </header>
+  <div class="operator-context" aria-live="polite">
+    <span>ACTIVE WORKSPACE</span>
+    <strong id="operator-context-title">System briefing</strong>
+    <small id="operator-context-state">Standing by · no action in progress</small>
+  </div>
   <div class="chat-log" id="chat-log" role="log" aria-live="polite">
     <div class="chat-msg is-bot">
-      <div class="chat-bubble">Tell me what happened in your own words &mdash; for
-        example &ldquo;we registered the wrong patient&rdquo; &mdash; and I will open
-        the right screen. I can also explain any term on screen.</div>
-      <div class="chat-meta">I choose actions; the console computes every number.</div>
+      <div class="chat-bubble">Tell me the situation or the outcome you need. I will
+        inspect live state, propose the safest next action, drive the right console,
+        and verify what actually changed.</div>
+      <div class="chat-meta">Deterministic tools · explicit approval · grounded results</div>
     </div>
   </div>
   <div class="chat-suggestions" id="chat-suggestions"></div>
   <form class="chat-form" id="chat-form">
     <input id="chat-input" type="text" autocomplete="off" maxlength="600"
-           placeholder="Describe what happened&hellip;" aria-label="Message the assistant">
+           placeholder="Describe the situation or desired outcome&hellip;" aria-label="Message the operator">
     <button class="btn small" type="submit">Send</button>
   </form>
 </section>

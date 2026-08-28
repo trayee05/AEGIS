@@ -378,7 +378,13 @@ function selectRole(id, { firstRun = false } = {}) {
   activateView(r.home, { scroll: false });
   renderRoleSurface();
   if (document.getElementById("chat-suggestions")) renderSuggestions();
-  if (firstRun) startTour(id);
+  if (document.getElementById("operator-context-title")) updateOperatorContext();
+  if (firstRun) {
+    startTour(id);
+    // The operator is the primary way into a role workflow, so introduce it
+    // alongside the console rather than leaving it behind a floating button.
+    window.setTimeout(() => toggleChat(true), 120);
+  }
 }
 
 function initRoles() {
@@ -2468,7 +2474,28 @@ function initTour() {
  * language model only ever chose which action to take. That is why nothing
  * here can show a hallucinated clinical value.
  */
-const CHAT = { open: false, busy: false, history: [] };
+function assistantSessionId() {
+  const key = "aegis-operator-session";
+  try {
+    let id = sessionStorage.getItem(key);
+    if (!id) {
+      id = (crypto.randomUUID ? crypto.randomUUID() :
+        `operator-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+      sessionStorage.setItem(key, id);
+    }
+    return id;
+  } catch (e) {
+    return `operator-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+}
+
+const CHAT = {
+  open: false,
+  busy: false,
+  history: [],
+  sessionId: assistantSessionId(),
+  lastResult: null,
+};
 
 const CHAT_SUGGESTIONS = {
   clinician: ["Which patients need attention?", "What changed for Devraj?",
@@ -2498,6 +2525,8 @@ function initChat() {
   renderSuggestions();
   refreshChatBudget();
   primeChat();
+  updateOperatorContext();
+  if ($("role-gate").hidden) toggleChat(true);
 }
 
 /* Open with what is actually true, not a generic greeting. The assistant should
@@ -2506,12 +2535,15 @@ async function primeChat() {
   try {
     const r = await api("/api/assistant", {
       method: "POST",
-      body: JSON.stringify({ message: "what is going on", role: currentRole() }),
+      body: JSON.stringify({ message: "what is going on", role: currentRole(),
+                             session_id: CHAT.sessionId }),
     });
     if (r.reply) {
       chatBubble(r.reply, "bot", "current state");
       renderChatNext(r.suggestions || []);
     }
+    CHAT.lastResult = r;
+    updateOperatorContext(r);
     if (r.budget) renderChatBudget(r.budget);
   } catch (e) { /* the static opener already covers this */ }
 }
@@ -2520,6 +2552,7 @@ function toggleChat(force) {
   CHAT.open = force === undefined ? !CHAT.open : force;
   $("chat-panel").hidden = !CHAT.open;
   $("chat-toggle").setAttribute("aria-expanded", CHAT.open ? "true" : "false");
+  document.body.classList.toggle("operator-open", CHAT.open);
   if (CHAT.open) {
     window.setTimeout(() => $("chat-input").focus(), 80);
   }
@@ -2554,13 +2587,61 @@ function renderChatNext(suggestions) {
   const host = $("chat-suggestions");
   if (!suggestions.length) { renderSuggestions(); return; }
   host.innerHTML = suggestions.map((s) =>
-    `<button type="button" data-say="${esc(s.message)}">${esc(s.label)}</button>`).join("");
+    `<button type="button" data-say="${esc(s.message)}" ${
+      s.message === "yes" ? 'data-intent="approve"' :
+      s.message === "no" ? 'data-intent="cancel"' : ""}>${esc(s.label)}</button>`).join("");
+}
+
+function renderChatPlan(plan) {
+  const card = el("article", `operator-plan${
+    plan.risk === "destructive" ? " is-destructive" : ""}`);
+  card.setAttribute("aria-label", `Proposed plan: ${plan.title}`);
+  card.innerHTML =
+    `<div class="operator-plan-head">
+       <div><div class="operator-plan-kicker">Proposed execution plan</div>
+         <h4>${esc(plan.title)}</h4></div>
+       <span class="operator-risk">${esc(plan.risk)}</span>
+     </div>
+     <p class="operator-plan-summary">${esc(plan.summary)}</p>
+     <div class="operator-plan-scope"><span>Scope</span>${esc(plan.scope)}</div>
+     <ol>${(plan.steps || []).map((step) => `<li>${esc(step)}</li>`).join("")}</ol>`;
+  $("chat-log").appendChild(card);
+  $("chat-log").scrollTop = $("chat-log").scrollHeight;
+}
+
+function settlePendingPlan(label, kind) {
+  const cards = $("chat-log").querySelectorAll(".operator-plan:not(.is-settled)");
+  const card = cards[cards.length - 1];
+  if (!card) return;
+  card.classList.add("is-settled", `is-${kind}`);
+  card.appendChild(el("div", "operator-plan-result", esc(label)));
+}
+
+function updateOperatorContext(result) {
+  const title = $("operator-context-title");
+  const detail = $("operator-context-state");
+  if (!title || !detail) return;
+  title.textContent = role().context;
+  if (result?.requires_confirmation) {
+    detail.textContent = "Plan ready · waiting for explicit approval";
+  } else if (result?.ui?.recovered) {
+    detail.textContent = "Recovery executed · verification complete";
+  } else if (result?.state?.open_incidents) {
+    detail.textContent = `${result.state.open_incidents} open incident(s) · containment required`;
+  } else if (result?.state?.queue) {
+    detail.textContent = `${result.state.queue} decision(s) waiting for a person`;
+  } else if (CHAT.busy) {
+    detail.textContent = "Inspecting state and selecting an authorised action…";
+  } else {
+    detail.textContent = "Standing by · grounded in current workspace state";
+  }
 }
 
 async function sendChat(message) {
   message = String(message || "").trim();
   if (!message || CHAT.busy) return;
   CHAT.busy = true;
+  updateOperatorContext();
   $("chat-input").value = "";
   chatBubble(message, "user");
 
@@ -2572,23 +2653,33 @@ async function sendChat(message) {
   try {
     const r = await api("/api/assistant", {
       method: "POST",
-      body: JSON.stringify({ message, role: currentRole() }),
+      body: JSON.stringify({ message, role: currentRole(),
+                             session_id: CHAT.sessionId }),
     });
+    CHAT.lastResult = r;
     thinking.remove();
+    if (String(r.source || "").includes("confirmed")) {
+      settlePendingPlan("Approved · execution completed", "approved");
+    } else if (/^(no|nope|cancel|stop)$/i.test(message) && r.action === "none") {
+      settlePendingPlan("Cancelled · no changes made", "cancelled");
+    }
     // "local" and "glossary" cost nothing; only "model" spends a token.
     const badge = r.source.startsWith("model") ? "interpreted by Gemini" : "answered locally";
     const bubble = chatBubble(r.reply || "Done.", "bot", badge);
+    if (r.plan) renderChatPlan(r.plan);
     // A multi-step action shows its working, so the user sees what was done on
     // their behalf rather than being told it happened.
     if (r.steps?.length) renderChatSteps(bubble, r.steps);
     await applyChatUi(r.ui || {});
     renderChatNext(r.suggestions || []);
+    updateOperatorContext(r);
     if (r.budget) renderChatBudget(r.budget);
   } catch (e) {
     thinking.remove();
     chatBubble(`Something went wrong: ${e.message}`, "bot", "error");
   } finally {
     CHAT.busy = false;
+    updateOperatorContext(CHAT.lastResult);
     $("chat-input").focus();
   }
 }
@@ -2640,7 +2731,8 @@ async function applyChatUi(ui) {
 }
 
 async function refreshChatBudget() {
-  try { renderChatBudget(await api("/api/assistant/status")); }
+  try { renderChatBudget(await api(
+    `/api/assistant/status?session_id=${encodeURIComponent(CHAT.sessionId)}`)); }
   catch (e) { /* status is optional */ }
 }
 
