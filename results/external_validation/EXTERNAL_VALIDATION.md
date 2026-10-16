@@ -24,7 +24,7 @@ generator and realistic US Core resource shapes.
 
 ## Paired recovery result
 
-The run completed **108 condition runs across 12 incidents** in 159.184 seconds.
+The run completed **108 condition runs across 12 incidents** in 21.174 seconds.
 
 | Condition | RWH | Recall | Precision | BSR | RTS | UER | DRR |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -55,7 +55,7 @@ estimate effectiveness, safety, or utility in a hospital.
 - The deterministic clinical composer validates recovery mechanics, not open-ended LLM behaviour.
 - The external run validates FHIR R4 shape and source independence, not hospital workflow integration.
 - Family F3 adds a deterministic restricted-field incident overlay because Synthea does not encode the study's local role policy.
-- Thresholds remain those frozen in the proposal; this run is not a prospective clinical study.
+- Thresholds are fixed implementation defaults; the original pilot-selection record is unavailable, and this is not a prospective clinical study.
 
 The next evidence gate is a container-pinned MedAgentBench run with held-out task templates
 and at least one open-weight model, followed by clinician review of every positive label and

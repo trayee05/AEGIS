@@ -5,7 +5,9 @@ missing or withheld it searches its local sketch index using the receiver-scoped
 seed sketch, then applies temporal, artifact-type, patient-token, and workflow
 compatibility filters.
 
-    score(s,v) = a*explicit_edge(s,v) + b*sim(z_s, z_v) + c*compat(...)
+    score(s,v) = 1 for an explicit edge; otherwise
+                 0.34*sketch_similarity + 0.46*patient_compatibility
+                 + 0.20*resource_support_compatibility
 
 The latent component produces a *ranked candidate set only*. Nothing here
 quarantines or repairs anything - that is the whole point of the design
@@ -99,10 +101,12 @@ class CandidateDiscoverer:
                 sim = self._similarity(runtime, artifact, capsule)
                 compat = self.compatibility(artifact, capsule, incident_key)
                 support_overlap = self._support_overlap(artifact, capsule, incident_key)
-                score = (self.config.b_similarity * sim
-                         + self.config.c_compatibility * compat)
                 if compat == 0.0:
                     continue  # structurally impossible relationship
+                patient = self.patient_compatibility(artifact, capsule, incident_key)
+                score = (self.config.b_similarity * sim
+                         + self.config.c_patient * patient
+                         + self.config.d_resource * float(support_overlap))
                 if support_overlap:
                     # A shared opaque dependency can recover stale-value
                     # candidates that prose similarity misses. It remains only
@@ -116,7 +120,7 @@ class CandidateDiscoverer:
                         score=score,
                         explicit=False,
                         similarity=sim,
-                        compatibility=compat,
+                        compatibility=patient,
                         reasons=(
                             ["scoped_support_overlap", "compat_filter"]
                             if support_overlap else ["sketch_similarity", "compat_filter"]
@@ -184,16 +188,25 @@ class CandidateDiscoverer:
         else:
             return 0.0
 
-        # Patient token: local match against the receiver-scoped pseudonym.
+        # Patient compatibility is scored separately by Eq. (2), but remains
+        # represented here for callers that inspect the composite filter.
         checks += 1
-        if artifact.patient_scope:
-            local_token = receiver_scoped_token(
-                artifact.patient_scope, capsule.recipient, incident_key)
-            score += 1.0 if local_token == capsule.patient_token else 0.15
-        else:
-            score += 0.5
+        score += self.patient_compatibility(artifact, capsule, incident_key)
 
         return score / checks
+
+    @staticmethod
+    def patient_compatibility(artifact: MemoryArtifact, capsule: RecoveryCapsule,
+                              incident_key: bytes) -> float:
+        """Receiver-local patient-scope signal used as p(s,m) in the paper."""
+        if not artifact.patient_scope:
+            return 0.5
+        local_token = receiver_scoped_token(
+            artifact.patient_scope, capsule.recipient, incident_key)
+        # A different scope is uncertain, not impossible: wrong-patient
+        # propagation may cross the apparent scope boundary. Preserve those
+        # candidates for counterfactual attribution instead of discarding them.
+        return 1.0 if local_token == capsule.patient_token else 0.5
 
 
 __all__ = ["CandidateDiscoverer", "Candidate", "STAGE_ORDER"]

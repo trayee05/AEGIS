@@ -1,0 +1,638 @@
+{
+  "study_type": "controlled in-process boundary and prose-only replay perturbation",
+  "clinical_or_stochastic_model_validation": false,
+  "key_and_process_access": {
+    "independent_default_roots": true,
+    "public_seed_forgery_accepted": false,
+    "stolen_key_forgery_accepted": true,
+    "process_level_raw_read_possible": true
+  },
+  "prose_only_replay": {
+    "artifact_type": "clinical_summary",
+    "changed_variants": 102,
+    "confirmed_changed_variants": 0,
+    "max_influence_score": 0.1759,
+    "default_attribution_threshold": 0.3,
+    "structured_facts_held_constant": true,
+    "details": {
+      "identical": {
+        "semantic_delta": 0.0,
+        "influence_score": 0.0,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "appended_sentence": {
+        "semantic_delta": 0.0242,
+        "influence_score": 0.0082,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "unrelated_prose": {
+        "semantic_delta": 0.5174,
+        "influence_score": 0.1759,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_000": {
+        "semantic_delta": 0.4373,
+        "influence_score": 0.1487,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_001": {
+        "semantic_delta": 0.3869,
+        "influence_score": 0.1316,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_002": {
+        "semantic_delta": 0.491,
+        "influence_score": 0.1669,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_003": {
+        "semantic_delta": 0.418,
+        "influence_score": 0.1421,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_004": {
+        "semantic_delta": 0.4411,
+        "influence_score": 0.15,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_005": {
+        "semantic_delta": 0.4433,
+        "influence_score": 0.1507,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_006": {
+        "semantic_delta": 0.3856,
+        "influence_score": 0.1311,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_007": {
+        "semantic_delta": 0.4428,
+        "influence_score": 0.1505,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_008": {
+        "semantic_delta": 0.3885,
+        "influence_score": 0.1321,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_009": {
+        "semantic_delta": 0.4205,
+        "influence_score": 0.143,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_010": {
+        "semantic_delta": 0.4401,
+        "influence_score": 0.1496,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_011": {
+        "semantic_delta": 0.4142,
+        "influence_score": 0.1408,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_012": {
+        "semantic_delta": 0.354,
+        "influence_score": 0.1203,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_013": {
+        "semantic_delta": 0.4103,
+        "influence_score": 0.1395,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_014": {
+        "semantic_delta": 0.4853,
+        "influence_score": 0.165,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_015": {
+        "semantic_delta": 0.4332,
+        "influence_score": 0.1473,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_016": {
+        "semantic_delta": 0.4452,
+        "influence_score": 0.1514,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_017": {
+        "semantic_delta": 0.3852,
+        "influence_score": 0.131,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_018": {
+        "semantic_delta": 0.427,
+        "influence_score": 0.1452,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_019": {
+        "semantic_delta": 0.4301,
+        "influence_score": 0.1462,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_020": {
+        "semantic_delta": 0.4045,
+        "influence_score": 0.1375,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_021": {
+        "semantic_delta": 0.4366,
+        "influence_score": 0.1484,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_022": {
+        "semantic_delta": 0.4279,
+        "influence_score": 0.1455,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_023": {
+        "semantic_delta": 0.4158,
+        "influence_score": 0.1414,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_024": {
+        "semantic_delta": 0.4474,
+        "influence_score": 0.1521,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_025": {
+        "semantic_delta": 0.4375,
+        "influence_score": 0.1488,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_026": {
+        "semantic_delta": 0.4714,
+        "influence_score": 0.1603,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_027": {
+        "semantic_delta": 0.4277,
+        "influence_score": 0.1454,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_028": {
+        "semantic_delta": 0.3978,
+        "influence_score": 0.1352,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_029": {
+        "semantic_delta": 0.4567,
+        "influence_score": 0.1553,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_030": {
+        "semantic_delta": 0.4398,
+        "influence_score": 0.1495,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_031": {
+        "semantic_delta": 0.4766,
+        "influence_score": 0.162,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_032": {
+        "semantic_delta": 0.4084,
+        "influence_score": 0.1389,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_033": {
+        "semantic_delta": 0.4407,
+        "influence_score": 0.1499,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_034": {
+        "semantic_delta": 0.4325,
+        "influence_score": 0.147,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_035": {
+        "semantic_delta": 0.4347,
+        "influence_score": 0.1478,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_036": {
+        "semantic_delta": 0.4255,
+        "influence_score": 0.1447,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_037": {
+        "semantic_delta": 0.4465,
+        "influence_score": 0.1518,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_038": {
+        "semantic_delta": 0.4414,
+        "influence_score": 0.1501,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_039": {
+        "semantic_delta": 0.4964,
+        "influence_score": 0.1688,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_040": {
+        "semantic_delta": 0.4258,
+        "influence_score": 0.1448,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_041": {
+        "semantic_delta": 0.4157,
+        "influence_score": 0.1413,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_042": {
+        "semantic_delta": 0.4345,
+        "influence_score": 0.1477,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_043": {
+        "semantic_delta": 0.4317,
+        "influence_score": 0.1468,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_044": {
+        "semantic_delta": 0.4616,
+        "influence_score": 0.157,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_045": {
+        "semantic_delta": 0.4196,
+        "influence_score": 0.1427,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_046": {
+        "semantic_delta": 0.477,
+        "influence_score": 0.1622,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_047": {
+        "semantic_delta": 0.4423,
+        "influence_score": 0.1504,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_048": {
+        "semantic_delta": 0.4579,
+        "influence_score": 0.1557,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_049": {
+        "semantic_delta": 0.4349,
+        "influence_score": 0.1479,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_050": {
+        "semantic_delta": 0.3966,
+        "influence_score": 0.1348,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_051": {
+        "semantic_delta": 0.4747,
+        "influence_score": 0.1614,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_052": {
+        "semantic_delta": 0.4317,
+        "influence_score": 0.1468,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_053": {
+        "semantic_delta": 0.4642,
+        "influence_score": 0.1578,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_054": {
+        "semantic_delta": 0.4664,
+        "influence_score": 0.1586,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_055": {
+        "semantic_delta": 0.455,
+        "influence_score": 0.1547,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_056": {
+        "semantic_delta": 0.4235,
+        "influence_score": 0.144,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_057": {
+        "semantic_delta": 0.4124,
+        "influence_score": 0.1402,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_058": {
+        "semantic_delta": 0.4485,
+        "influence_score": 0.1525,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_059": {
+        "semantic_delta": 0.4594,
+        "influence_score": 0.1562,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_060": {
+        "semantic_delta": 0.4401,
+        "influence_score": 0.1496,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_061": {
+        "semantic_delta": 0.4372,
+        "influence_score": 0.1486,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_062": {
+        "semantic_delta": 0.4268,
+        "influence_score": 0.1451,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_063": {
+        "semantic_delta": 0.4826,
+        "influence_score": 0.1641,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_064": {
+        "semantic_delta": 0.4095,
+        "influence_score": 0.1392,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_065": {
+        "semantic_delta": 0.4825,
+        "influence_score": 0.164,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_066": {
+        "semantic_delta": 0.4598,
+        "influence_score": 0.1563,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_067": {
+        "semantic_delta": 0.4228,
+        "influence_score": 0.1437,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_068": {
+        "semantic_delta": 0.4757,
+        "influence_score": 0.1617,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_069": {
+        "semantic_delta": 0.4868,
+        "influence_score": 0.1655,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_070": {
+        "semantic_delta": 0.5118,
+        "influence_score": 0.174,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_071": {
+        "semantic_delta": 0.4795,
+        "influence_score": 0.163,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_072": {
+        "semantic_delta": 0.3949,
+        "influence_score": 0.1343,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_073": {
+        "semantic_delta": 0.4849,
+        "influence_score": 0.1649,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_074": {
+        "semantic_delta": 0.438,
+        "influence_score": 0.1489,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_075": {
+        "semantic_delta": 0.4334,
+        "influence_score": 0.1473,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_076": {
+        "semantic_delta": 0.4291,
+        "influence_score": 0.1459,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_077": {
+        "semantic_delta": 0.4759,
+        "influence_score": 0.1618,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_078": {
+        "semantic_delta": 0.416,
+        "influence_score": 0.1414,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_079": {
+        "semantic_delta": 0.4571,
+        "influence_score": 0.1554,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_080": {
+        "semantic_delta": 0.4548,
+        "influence_score": 0.1546,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_081": {
+        "semantic_delta": 0.4192,
+        "influence_score": 0.1425,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_082": {
+        "semantic_delta": 0.4572,
+        "influence_score": 0.1555,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_083": {
+        "semantic_delta": 0.4523,
+        "influence_score": 0.1538,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_084": {
+        "semantic_delta": 0.4485,
+        "influence_score": 0.1525,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_085": {
+        "semantic_delta": 0.4538,
+        "influence_score": 0.1543,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_086": {
+        "semantic_delta": 0.4196,
+        "influence_score": 0.1427,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_087": {
+        "semantic_delta": 0.4317,
+        "influence_score": 0.1468,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_088": {
+        "semantic_delta": 0.4341,
+        "influence_score": 0.1476,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_089": {
+        "semantic_delta": 0.4605,
+        "influence_score": 0.1566,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_090": {
+        "semantic_delta": 0.3835,
+        "influence_score": 0.1304,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_091": {
+        "semantic_delta": 0.421,
+        "influence_score": 0.1431,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_092": {
+        "semantic_delta": 0.4193,
+        "influence_score": 0.1426,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_093": {
+        "semantic_delta": 0.4398,
+        "influence_score": 0.1495,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_094": {
+        "semantic_delta": 0.4153,
+        "influence_score": 0.1412,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_095": {
+        "semantic_delta": 0.433,
+        "influence_score": 0.1472,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_096": {
+        "semantic_delta": 0.4485,
+        "influence_score": 0.1525,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_097": {
+        "semantic_delta": 0.4346,
+        "influence_score": 0.1478,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_098": {
+        "semantic_delta": 0.4486,
+        "influence_score": 0.1525,
+        "confirmed": false,
+        "predicate_changed": false
+      },
+      "random_099": {
+        "semantic_delta": 0.4326,
+        "influence_score": 0.1471,
+        "confirmed": false,
+        "predicate_changed": false
+      }
+    }
+  }
+}

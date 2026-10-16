@@ -22,7 +22,7 @@ the final paper.
 | Proposal | Commitment | Implementation | Verified by |
 | --- | --- | --- | --- |
 | 6.1 | `q(v)` over six states; observed lineage `E_obs ⊆ E` | `memory/models.py::MemoryState`, `incident/masks.py` | `test_foundations.py::test_transition_matrix` |
-| 6.2 | `score(s,v) = a·explicit + b·sim + c·compat`, threshold `tau_c` | `care/candidate.py::discover` | `test_care.py::TestCARELoop` |
+| 6.2 | Exact edge score 1; latent score `0.34·sketch + 0.46·patient + 0.20·resource`, threshold `tau_c` | `care/candidate.py::discover` | `test_care.py::TestCARELoop` |
 | 6.3 | `I(s→v) = w1·semantic + w2·patient + w3·resource`; exact predicate overrides | `care/attribution.py::assess` | `test_invariants.py::test_similarity_alone_cannot_trigger_destructive_repair` |
 | 6.4 | `J = λs·RWH + λu·(1−BSR) + λp·UER + λr·DRR + λc·Cost` | `eval/stats.py::objective_j` | `test_evaluation.py::test_objective_j_prefers_care` |
 | 6.5 | The nine-step algorithm | `care/coordinator.py::recover` | `test_care.py::TestCARELoop` |

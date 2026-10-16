@@ -9,6 +9,7 @@ import base64
 import hashlib
 import hmac
 import json
+import secrets
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
@@ -112,8 +113,13 @@ class KeyRing:
     """Registry of principal public keys, plus the private identities this
     process is allowed to sign with."""
 
-    def __init__(self, root_seed: bytes = b"aegis-care-root") -> None:
-        self._root_seed = root_seed
+    def __init__(self, root_seed: Optional[bytes] = None) -> None:
+        # A fixed public seed makes every private signing key recoverable.
+        # Callers may pass an explicit seed for controlled tests, but ordinary
+        # environments need an unpredictable, process-local root.
+        self._root_seed = root_seed if root_seed is not None else secrets.token_bytes(32)
+        if len(self._root_seed) < 32:
+            raise ValueError("root_seed must contain at least 32 bytes")
         self._identities: Dict[str, SigningIdentity] = {}
         self._public: Dict[str, str] = {}
 

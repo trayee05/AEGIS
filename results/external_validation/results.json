@@ -103,7 +103,7 @@
       "oh_model_calls": 8,
       "oh_replays": 4,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.4046,
+      "oh_wall_seconds": 0.0416,
       "oh_capsules": 15,
       "oh_capsule_bytes": 15074,
       "oh_rounds": 4,
@@ -135,7 +135,7 @@
       "oh_model_calls": 13,
       "oh_replays": 8,
       "oh_writes": 4,
-      "oh_wall_seconds": 0.5018,
+      "oh_wall_seconds": 0.0413,
       "oh_capsules": 15,
       "oh_capsule_bytes": 15074,
       "oh_rounds": 4,
@@ -167,10 +167,10 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.8542,
+      "oh_wall_seconds": 0.0728,
       "oh_capsules": 30,
       "oh_capsule_bytes": 31095,
-      "oh_rounds": 2,
+      "oh_rounds": 3,
       "n_true_contaminated": 4,
       "n_neutralised": 4,
       "n_touched": 9,
@@ -255,7 +255,7 @@
       "oh_model_calls": 22,
       "oh_replays": 13,
       "oh_writes": 4,
-      "oh_wall_seconds": 0.7281,
+      "oh_wall_seconds": 0.0675,
       "oh_capsules": 15,
       "oh_capsule_bytes": 15074,
       "oh_rounds": 2,
@@ -371,7 +371,7 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.0523,
+      "oh_wall_seconds": 0.0048,
       "oh_capsules": 3,
       "oh_capsule_bytes": 2475,
       "oh_rounds": 1,
@@ -403,7 +403,7 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.0579,
+      "oh_wall_seconds": 0.0042,
       "oh_capsules": 3,
       "oh_capsule_bytes": 2475,
       "oh_rounds": 1,
@@ -435,10 +435,10 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 1.0963,
+      "oh_wall_seconds": 0.0787,
       "oh_capsules": 30,
       "oh_capsule_bytes": 31000,
-      "oh_rounds": 2,
+      "oh_rounds": 3,
       "n_true_contaminated": 4,
       "n_neutralised": 4,
       "n_touched": 9,
@@ -523,7 +523,7 @@
       "oh_model_calls": 22,
       "oh_replays": 13,
       "oh_writes": 4,
-      "oh_wall_seconds": 0.8074,
+      "oh_wall_seconds": 0.073,
       "oh_capsules": 15,
       "oh_capsule_bytes": 15068,
       "oh_rounds": 2,
@@ -639,7 +639,7 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.0625,
+      "oh_wall_seconds": 0.0054,
       "oh_capsules": 3,
       "oh_capsule_bytes": 2487,
       "oh_rounds": 1,
@@ -671,7 +671,7 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.0579,
+      "oh_wall_seconds": 0.0048,
       "oh_capsules": 3,
       "oh_capsule_bytes": 2487,
       "oh_rounds": 1,
@@ -703,10 +703,10 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.7963,
+      "oh_wall_seconds": 0.0896,
       "oh_capsules": 30,
       "oh_capsule_bytes": 31048,
-      "oh_rounds": 2,
+      "oh_rounds": 3,
       "n_true_contaminated": 4,
       "n_neutralised": 4,
       "n_touched": 9,
@@ -791,7 +791,7 @@
       "oh_model_calls": 22,
       "oh_replays": 13,
       "oh_writes": 4,
-      "oh_wall_seconds": 0.7567,
+      "oh_wall_seconds": 0.085,
       "oh_capsules": 15,
       "oh_capsule_bytes": 15052,
       "oh_rounds": 2,
@@ -907,7 +907,7 @@
       "oh_model_calls": 4,
       "oh_replays": 2,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.3512,
+      "oh_wall_seconds": 0.0353,
       "oh_capsules": 9,
       "oh_capsule_bytes": 10359,
       "oh_rounds": 3,
@@ -939,7 +939,7 @@
       "oh_model_calls": 7,
       "oh_replays": 4,
       "oh_writes": 2,
-      "oh_wall_seconds": 0.4102,
+      "oh_wall_seconds": 0.0456,
       "oh_capsules": 9,
       "oh_capsule_bytes": 10359,
       "oh_rounds": 3,
@@ -971,10 +971,10 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.6148,
+      "oh_wall_seconds": 0.058,
       "oh_capsules": 18,
       "oh_capsule_bytes": 20343,
-      "oh_rounds": 2,
+      "oh_rounds": 3,
       "n_true_contaminated": 2,
       "n_neutralised": 2,
       "n_touched": 5,
@@ -1059,7 +1059,7 @@
       "oh_model_calls": 13,
       "oh_replays": 7,
       "oh_writes": 2,
-      "oh_wall_seconds": 0.5753,
+      "oh_wall_seconds": 0.061,
       "oh_capsules": 9,
       "oh_capsule_bytes": 10359,
       "oh_rounds": 2,
@@ -1175,7 +1175,7 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.086,
+      "oh_wall_seconds": 0.0078,
       "oh_capsules": 3,
       "oh_capsule_bytes": 3613,
       "oh_rounds": 1,
@@ -1207,7 +1207,7 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.0802,
+      "oh_wall_seconds": 0.0073,
       "oh_capsules": 3,
       "oh_capsule_bytes": 3613,
       "oh_rounds": 1,
@@ -1239,10 +1239,10 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.5703,
+      "oh_wall_seconds": 0.0596,
       "oh_capsules": 18,
       "oh_capsule_bytes": 20361,
-      "oh_rounds": 2,
+      "oh_rounds": 3,
       "n_true_contaminated": 2,
       "n_neutralised": 2,
       "n_touched": 5,
@@ -1327,7 +1327,7 @@
       "oh_model_calls": 13,
       "oh_replays": 7,
       "oh_writes": 2,
-      "oh_wall_seconds": 0.6038,
+      "oh_wall_seconds": 0.0644,
       "oh_capsules": 9,
       "oh_capsule_bytes": 10362,
       "oh_rounds": 2,
@@ -1443,7 +1443,7 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.0814,
+      "oh_wall_seconds": 0.0085,
       "oh_capsules": 3,
       "oh_capsule_bytes": 3603,
       "oh_rounds": 1,
@@ -1475,7 +1475,7 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.0659,
+      "oh_wall_seconds": 0.0078,
       "oh_capsules": 3,
       "oh_capsule_bytes": 3603,
       "oh_rounds": 1,
@@ -1507,10 +1507,10 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.5604,
+      "oh_wall_seconds": 0.0613,
       "oh_capsules": 18,
       "oh_capsule_bytes": 20376,
-      "oh_rounds": 2,
+      "oh_rounds": 3,
       "n_true_contaminated": 2,
       "n_neutralised": 2,
       "n_touched": 5,
@@ -1595,7 +1595,7 @@
       "oh_model_calls": 13,
       "oh_replays": 7,
       "oh_writes": 2,
-      "oh_wall_seconds": 0.6387,
+      "oh_wall_seconds": 0.0631,
       "oh_capsules": 9,
       "oh_capsule_bytes": 10361,
       "oh_rounds": 2,
@@ -1711,7 +1711,7 @@
       "oh_model_calls": 6,
       "oh_replays": 3,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.36,
+      "oh_wall_seconds": 0.0391,
       "oh_capsules": 12,
       "oh_capsule_bytes": 13145,
       "oh_rounds": 3,
@@ -1743,7 +1743,7 @@
       "oh_model_calls": 10,
       "oh_replays": 6,
       "oh_writes": 3,
-      "oh_wall_seconds": 0.4615,
+      "oh_wall_seconds": 0.0463,
       "oh_capsules": 12,
       "oh_capsule_bytes": 13145,
       "oh_rounds": 3,
@@ -1775,10 +1775,10 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.7505,
+      "oh_wall_seconds": 0.0719,
       "oh_capsules": 30,
       "oh_capsule_bytes": 30536,
-      "oh_rounds": 2,
+      "oh_rounds": 3,
       "n_true_contaminated": 3,
       "n_neutralised": 3,
       "n_touched": 9,
@@ -1859,11 +1859,11 @@
       "false_repair_rate": 0.0,
       "uer": 0.0,
       "drr": 0.0,
-      "oh_fhir_reads": 32,
-      "oh_model_calls": 20,
-      "oh_replays": 12,
+      "oh_fhir_reads": 30,
+      "oh_model_calls": 19,
+      "oh_replays": 11,
       "oh_writes": 3,
-      "oh_wall_seconds": 0.6992,
+      "oh_wall_seconds": 0.0615,
       "oh_capsules": 12,
       "oh_capsule_bytes": 13145,
       "oh_rounds": 2,
@@ -1979,7 +1979,7 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.0582,
+      "oh_wall_seconds": 0.0058,
       "oh_capsules": 3,
       "oh_capsule_bytes": 2575,
       "oh_rounds": 1,
@@ -2011,7 +2011,7 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.0545,
+      "oh_wall_seconds": 0.0054,
       "oh_capsules": 3,
       "oh_capsule_bytes": 2575,
       "oh_rounds": 1,
@@ -2043,10 +2043,10 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.7228,
+      "oh_wall_seconds": 0.07,
       "oh_capsules": 30,
       "oh_capsule_bytes": 30575,
-      "oh_rounds": 2,
+      "oh_rounds": 3,
       "n_true_contaminated": 3,
       "n_neutralised": 3,
       "n_touched": 9,
@@ -2127,11 +2127,11 @@
       "false_repair_rate": 0.0,
       "uer": 0.0,
       "drr": 0.0,
-      "oh_fhir_reads": 32,
-      "oh_model_calls": 20,
-      "oh_replays": 12,
+      "oh_fhir_reads": 30,
+      "oh_model_calls": 19,
+      "oh_replays": 11,
       "oh_writes": 3,
-      "oh_wall_seconds": 0.6322,
+      "oh_wall_seconds": 0.0612,
       "oh_capsules": 12,
       "oh_capsule_bytes": 13132,
       "oh_rounds": 2,
@@ -2247,7 +2247,7 @@
       "oh_model_calls": 2,
       "oh_replays": 1,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.1412,
+      "oh_wall_seconds": 0.0147,
       "oh_capsules": 6,
       "oh_capsule_bytes": 6280,
       "oh_rounds": 2,
@@ -2279,7 +2279,7 @@
       "oh_model_calls": 4,
       "oh_replays": 2,
       "oh_writes": 1,
-      "oh_wall_seconds": 0.1584,
+      "oh_wall_seconds": 0.016,
       "oh_capsules": 6,
       "oh_capsule_bytes": 6280,
       "oh_rounds": 2,
@@ -2311,10 +2311,10 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.6747,
+      "oh_wall_seconds": 0.0677,
       "oh_capsules": 30,
       "oh_capsule_bytes": 30554,
-      "oh_rounds": 2,
+      "oh_rounds": 3,
       "n_true_contaminated": 3,
       "n_neutralised": 3,
       "n_touched": 9,
@@ -2395,11 +2395,11 @@
       "false_repair_rate": 0.0,
       "uer": 0.0,
       "drr": 0.0,
-      "oh_fhir_reads": 32,
-      "oh_model_calls": 20,
-      "oh_replays": 12,
+      "oh_fhir_reads": 30,
+      "oh_model_calls": 19,
+      "oh_replays": 11,
       "oh_writes": 3,
-      "oh_wall_seconds": 0.6108,
+      "oh_wall_seconds": 0.0613,
       "oh_capsules": 12,
       "oh_capsule_bytes": 13139,
       "oh_rounds": 2,
@@ -2515,7 +2515,7 @@
       "oh_model_calls": 4,
       "oh_replays": 2,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.2609,
+      "oh_wall_seconds": 0.0279,
       "oh_capsules": 9,
       "oh_capsule_bytes": 10348,
       "oh_rounds": 3,
@@ -2547,7 +2547,7 @@
       "oh_model_calls": 7,
       "oh_replays": 4,
       "oh_writes": 2,
-      "oh_wall_seconds": 0.3326,
+      "oh_wall_seconds": 0.0336,
       "oh_capsules": 9,
       "oh_capsule_bytes": 10348,
       "oh_rounds": 3,
@@ -2579,10 +2579,10 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.6378,
+      "oh_wall_seconds": 0.0615,
       "oh_capsules": 18,
       "oh_capsule_bytes": 20063,
-      "oh_rounds": 2,
+      "oh_rounds": 3,
       "n_true_contaminated": 1,
       "n_neutralised": 1,
       "n_touched": 5,
@@ -2663,11 +2663,11 @@
       "false_repair_rate": 0.0,
       "uer": 0.0,
       "drr": 0.0,
-      "oh_fhir_reads": 21,
-      "oh_model_calls": 12,
-      "oh_replays": 6,
+      "oh_fhir_reads": 18,
+      "oh_model_calls": 10,
+      "oh_replays": 5,
       "oh_writes": 1,
-      "oh_wall_seconds": 0.4422,
+      "oh_wall_seconds": 0.0444,
       "oh_capsules": 6,
       "oh_capsule_bytes": 7896,
       "oh_rounds": 2,
@@ -2783,7 +2783,7 @@
       "oh_model_calls": 4,
       "oh_replays": 2,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.2873,
+      "oh_wall_seconds": 0.0283,
       "oh_capsules": 9,
       "oh_capsule_bytes": 10362,
       "oh_rounds": 3,
@@ -2815,7 +2815,7 @@
       "oh_model_calls": 7,
       "oh_replays": 4,
       "oh_writes": 2,
-      "oh_wall_seconds": 0.3573,
+      "oh_wall_seconds": 0.0336,
       "oh_capsules": 9,
       "oh_capsule_bytes": 10362,
       "oh_rounds": 3,
@@ -2847,10 +2847,10 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.564,
+      "oh_wall_seconds": 0.0611,
       "oh_capsules": 18,
       "oh_capsule_bytes": 20022,
-      "oh_rounds": 2,
+      "oh_rounds": 3,
       "n_true_contaminated": 1,
       "n_neutralised": 1,
       "n_touched": 5,
@@ -2931,11 +2931,11 @@
       "false_repair_rate": 0.0,
       "uer": 0.0,
       "drr": 0.0,
-      "oh_fhir_reads": 21,
-      "oh_model_calls": 12,
-      "oh_replays": 6,
+      "oh_fhir_reads": 18,
+      "oh_model_calls": 10,
+      "oh_replays": 5,
       "oh_writes": 1,
-      "oh_wall_seconds": 0.4132,
+      "oh_wall_seconds": 0.043,
       "oh_capsules": 6,
       "oh_capsule_bytes": 7882,
       "oh_rounds": 2,
@@ -3051,7 +3051,7 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.0863,
+      "oh_wall_seconds": 0.0074,
       "oh_capsules": 3,
       "oh_capsule_bytes": 3605,
       "oh_rounds": 1,
@@ -3083,7 +3083,7 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.0744,
+      "oh_wall_seconds": 0.0068,
       "oh_capsules": 3,
       "oh_capsule_bytes": 3605,
       "oh_rounds": 1,
@@ -3115,10 +3115,10 @@
       "oh_model_calls": 0,
       "oh_replays": 0,
       "oh_writes": 0,
-      "oh_wall_seconds": 0.6451,
+      "oh_wall_seconds": 0.0604,
       "oh_capsules": 18,
       "oh_capsule_bytes": 20041,
-      "oh_rounds": 2,
+      "oh_rounds": 3,
       "n_true_contaminated": 1,
       "n_neutralised": 1,
       "n_touched": 5,
@@ -3203,7 +3203,7 @@
       "oh_model_calls": 12,
       "oh_replays": 6,
       "oh_writes": 1,
-      "oh_wall_seconds": 0.4614,
+      "oh_wall_seconds": 0.047,
       "oh_capsules": 6,
       "oh_capsule_bytes": 7893,
       "oh_rounds": 2,
@@ -3284,7 +3284,7 @@
       "oh_model_calls": 2.3333,
       "oh_fhir_reads": 3.8333,
       "oh_capsule_bytes": 6993.8333,
-      "oh_wall_seconds": 0.186
+      "oh_wall_seconds": 0.0189
     },
     {
       "condition": "E",
@@ -3301,7 +3301,7 @@
       "oh_model_calls": 4.0,
       "oh_fhir_reads": 6.3333,
       "oh_capsule_bytes": 6993.8333,
-      "oh_wall_seconds": 0.2177
+      "oh_wall_seconds": 0.0211
     },
     {
       "condition": "F",
@@ -3318,7 +3318,7 @@
       "oh_model_calls": 0.0,
       "oh_fhir_reads": 0.0,
       "oh_capsule_bytes": 25501.1667,
-      "oh_wall_seconds": 0.7073
+      "oh_wall_seconds": 0.0677
     },
     {
       "condition": "G",
@@ -3365,11 +3365,11 @@
       "false_repair_rate": 0.0,
       "uer": 0.0,
       "drr": 0.0,
-      "oh_replays": 9.5,
-      "oh_model_calls": 16.75,
-      "oh_fhir_reads": 26.75,
+      "oh_replays": 9.0833,
+      "oh_model_calls": 16.1667,
+      "oh_fhir_reads": 25.75,
       "oh_capsule_bytes": 11613.5833,
-      "oh_wall_seconds": 0.6141
+      "oh_wall_seconds": 0.061
     }
   ],
   "by_condition_family": [
@@ -3605,7 +3605,7 @@
       "oh_model_calls": 2.6667,
       "oh_fhir_reads": 4.0,
       "oh_capsule_bytes": 6678.6667,
-      "oh_wall_seconds": 0.1731
+      "oh_wall_seconds": 0.0173
     },
     {
       "condition": "D",
@@ -3623,7 +3623,7 @@
       "oh_model_calls": 1.3333,
       "oh_fhir_reads": 2.3333,
       "oh_capsule_bytes": 5858.3333,
-      "oh_wall_seconds": 0.1729
+      "oh_wall_seconds": 0.0172
     },
     {
       "condition": "D",
@@ -3641,7 +3641,7 @@
       "oh_model_calls": 2.6667,
       "oh_fhir_reads": 4.3333,
       "oh_capsule_bytes": 7333.3333,
-      "oh_wall_seconds": 0.1865
+      "oh_wall_seconds": 0.0199
     },
     {
       "condition": "D",
@@ -3659,7 +3659,7 @@
       "oh_model_calls": 2.6667,
       "oh_fhir_reads": 4.6667,
       "oh_capsule_bytes": 8105.0,
-      "oh_wall_seconds": 0.2115
+      "oh_wall_seconds": 0.0212
     },
     {
       "condition": "E",
@@ -3677,7 +3677,7 @@
       "oh_model_calls": 4.3333,
       "oh_fhir_reads": 6.0,
       "oh_capsule_bytes": 6678.6667,
-      "oh_wall_seconds": 0.2059
+      "oh_wall_seconds": 0.0168
     },
     {
       "condition": "E",
@@ -3695,7 +3695,7 @@
       "oh_model_calls": 2.3333,
       "oh_fhir_reads": 4.0,
       "oh_capsule_bytes": 5858.3333,
-      "oh_wall_seconds": 0.1854
+      "oh_wall_seconds": 0.0202
     },
     {
       "condition": "E",
@@ -3713,7 +3713,7 @@
       "oh_model_calls": 4.6667,
       "oh_fhir_reads": 7.3333,
       "oh_capsule_bytes": 7333.3333,
-      "oh_wall_seconds": 0.2248
+      "oh_wall_seconds": 0.0226
     },
     {
       "condition": "E",
@@ -3731,7 +3731,7 @@
       "oh_model_calls": 4.6667,
       "oh_fhir_reads": 8.0,
       "oh_capsule_bytes": 8105.0,
-      "oh_wall_seconds": 0.2548
+      "oh_wall_seconds": 0.0247
     },
     {
       "condition": "F",
@@ -3749,7 +3749,7 @@
       "oh_model_calls": 0.0,
       "oh_fhir_reads": 0.0,
       "oh_capsule_bytes": 31047.6667,
-      "oh_wall_seconds": 0.9156
+      "oh_wall_seconds": 0.0804
     },
     {
       "condition": "F",
@@ -3767,7 +3767,7 @@
       "oh_model_calls": 0.0,
       "oh_fhir_reads": 0.0,
       "oh_capsule_bytes": 20360.0,
-      "oh_wall_seconds": 0.5818
+      "oh_wall_seconds": 0.0596
     },
     {
       "condition": "F",
@@ -3785,7 +3785,7 @@
       "oh_model_calls": 0.0,
       "oh_fhir_reads": 0.0,
       "oh_capsule_bytes": 30555.0,
-      "oh_wall_seconds": 0.716
+      "oh_wall_seconds": 0.0699
     },
     {
       "condition": "F",
@@ -3803,7 +3803,7 @@
       "oh_model_calls": 0.0,
       "oh_fhir_reads": 0.0,
       "oh_capsule_bytes": 20042.0,
-      "oh_wall_seconds": 0.6156
+      "oh_wall_seconds": 0.061
     },
     {
       "condition": "G",
@@ -3965,7 +3965,7 @@
       "oh_model_calls": 22.0,
       "oh_fhir_reads": 32.0,
       "oh_capsule_bytes": 15064.6667,
-      "oh_wall_seconds": 0.7641
+      "oh_wall_seconds": 0.0752
     },
     {
       "condition": "I",
@@ -3983,7 +3983,7 @@
       "oh_model_calls": 13.0,
       "oh_fhir_reads": 22.0,
       "oh_capsule_bytes": 10360.6667,
-      "oh_wall_seconds": 0.6059
+      "oh_wall_seconds": 0.0628
     },
     {
       "condition": "I",
@@ -3997,11 +3997,11 @@
       "false_repair_rate": 0.0,
       "uer": 0.0,
       "drr": 0.0,
-      "oh_replays": 12.0,
-      "oh_model_calls": 20.0,
-      "oh_fhir_reads": 32.0,
+      "oh_replays": 11.0,
+      "oh_model_calls": 19.0,
+      "oh_fhir_reads": 30.0,
       "oh_capsule_bytes": 13138.6667,
-      "oh_wall_seconds": 0.6474
+      "oh_wall_seconds": 0.0613
     },
     {
       "condition": "I",
@@ -4015,11 +4015,11 @@
       "false_repair_rate": 0.0,
       "uer": 0.0,
       "drr": 0.0,
-      "oh_replays": 6.0,
-      "oh_model_calls": 12.0,
-      "oh_fhir_reads": 21.0,
+      "oh_replays": 5.3333,
+      "oh_model_calls": 10.6667,
+      "oh_fhir_reads": 19.0,
       "oh_capsule_bytes": 7890.3333,
-      "oh_wall_seconds": 0.4389
+      "oh_wall_seconds": 0.0448
     }
   ],
   "by_condition_depth": [
@@ -4093,7 +4093,7 @@
       "oh_model_calls": 2.3333,
       "oh_fhir_reads": 3.8333,
       "oh_capsule_bytes": 6993.8333,
-      "oh_wall_seconds": 0.186
+      "oh_wall_seconds": 0.0189
     },
     {
       "condition": "E",
@@ -4111,7 +4111,7 @@
       "oh_model_calls": 4.0,
       "oh_fhir_reads": 6.3333,
       "oh_capsule_bytes": 6993.8333,
-      "oh_wall_seconds": 0.2177
+      "oh_wall_seconds": 0.0211
     },
     {
       "condition": "F",
@@ -4129,7 +4129,7 @@
       "oh_model_calls": 0.0,
       "oh_fhir_reads": 0.0,
       "oh_capsule_bytes": 25501.1667,
-      "oh_wall_seconds": 0.7073
+      "oh_wall_seconds": 0.0677
     },
     {
       "condition": "G",
@@ -4179,11 +4179,11 @@
       "false_repair_rate": 0.0,
       "uer": 0.0,
       "drr": 0.0,
-      "oh_replays": 9.5,
-      "oh_model_calls": 16.75,
-      "oh_fhir_reads": 26.75,
+      "oh_replays": 9.0833,
+      "oh_model_calls": 16.1667,
+      "oh_fhir_reads": 25.75,
       "oh_capsule_bytes": 11613.5833,
-      "oh_wall_seconds": 0.6141
+      "oh_wall_seconds": 0.061
     }
   ],
   "by_condition_provenance": [
@@ -4365,7 +4365,7 @@
       "oh_model_calls": 5.5,
       "oh_fhir_reads": 9.0,
       "oh_capsule_bytes": 12231.5,
-      "oh_wall_seconds": 0.3442
+      "oh_wall_seconds": 0.036
     },
     {
       "condition": "D",
@@ -4383,7 +4383,7 @@
       "oh_model_calls": 1.0,
       "oh_fhir_reads": 1.75,
       "oh_capsule_bytes": 4756.25,
-      "oh_wall_seconds": 0.121
+      "oh_wall_seconds": 0.0117
     },
     {
       "condition": "D",
@@ -4401,7 +4401,7 @@
       "oh_model_calls": 0.5,
       "oh_fhir_reads": 0.75,
       "oh_capsule_bytes": 3993.75,
-      "oh_wall_seconds": 0.0929
+      "oh_wall_seconds": 0.009
     },
     {
       "condition": "E",
@@ -4419,7 +4419,7 @@
       "oh_model_calls": 9.25,
       "oh_fhir_reads": 14.5,
       "oh_capsule_bytes": 12231.5,
-      "oh_wall_seconds": 0.4265
+      "oh_wall_seconds": 0.0417
     },
     {
       "condition": "E",
@@ -4437,7 +4437,7 @@
       "oh_model_calls": 1.75,
       "oh_fhir_reads": 3.0,
       "oh_capsule_bytes": 4756.25,
-      "oh_wall_seconds": 0.1375
+      "oh_wall_seconds": 0.0126
     },
     {
       "condition": "E",
@@ -4455,7 +4455,7 @@
       "oh_model_calls": 1.0,
       "oh_fhir_reads": 1.5,
       "oh_capsule_bytes": 3993.75,
-      "oh_wall_seconds": 0.0892
+      "oh_wall_seconds": 0.0089
     },
     {
       "condition": "F",
@@ -4473,7 +4473,7 @@
       "oh_model_calls": 0.0,
       "oh_fhir_reads": 0.0,
       "oh_capsule_bytes": 25509.25,
-      "oh_wall_seconds": 0.7143
+      "oh_wall_seconds": 0.066
     },
     {
       "condition": "F",
@@ -4491,7 +4491,7 @@
       "oh_model_calls": 0.0,
       "oh_fhir_reads": 0.0,
       "oh_capsule_bytes": 25489.5,
-      "oh_wall_seconds": 0.7384
+      "oh_wall_seconds": 0.0674
     },
     {
       "condition": "F",
@@ -4509,7 +4509,7 @@
       "oh_model_calls": 0.0,
       "oh_fhir_reads": 0.0,
       "oh_capsule_bytes": 25504.75,
-      "oh_wall_seconds": 0.6691
+      "oh_wall_seconds": 0.0698
     },
     {
       "condition": "G",
@@ -4631,11 +4631,11 @@
       "false_repair_rate": 0.0,
       "uer": 0.0,
       "drr": 0.0,
-      "oh_replays": 9.5,
-      "oh_model_calls": 16.75,
-      "oh_fhir_reads": 26.75,
+      "oh_replays": 9.0,
+      "oh_model_calls": 16.0,
+      "oh_fhir_reads": 25.5,
       "oh_capsule_bytes": 11618.5,
-      "oh_wall_seconds": 0.6112
+      "oh_wall_seconds": 0.0586
     },
     {
       "condition": "I",
@@ -4649,11 +4649,11 @@
       "false_repair_rate": 0.0,
       "uer": 0.0,
       "drr": 0.0,
-      "oh_replays": 9.5,
-      "oh_model_calls": 16.75,
-      "oh_fhir_reads": 26.75,
+      "oh_replays": 9.0,
+      "oh_model_calls": 16.0,
+      "oh_fhir_reads": 25.5,
       "oh_capsule_bytes": 11611.0,
-      "oh_wall_seconds": 0.6141
+      "oh_wall_seconds": 0.0604
     },
     {
       "condition": "I",
@@ -4667,11 +4667,11 @@
       "false_repair_rate": 0.0,
       "uer": 0.0,
       "drr": 0.0,
-      "oh_replays": 9.5,
-      "oh_model_calls": 16.75,
-      "oh_fhir_reads": 26.75,
+      "oh_replays": 9.25,
+      "oh_model_calls": 16.5,
+      "oh_fhir_reads": 26.25,
       "oh_capsule_bytes": 11611.25,
-      "oh_wall_seconds": 0.6169
+      "oh_wall_seconds": 0.0641
     }
   ],
   "rq1_matched_loss": [],
@@ -4820,13 +4820,14 @@
     }
   ],
   "verification_failures": [],
-  "wall_seconds": 159.184,
+  "wall_seconds": 21.174,
   "config": {
     "seed": 20260729,
     "candidate": {
       "a_explicit": 1.0,
-      "b_similarity": 0.55,
-      "c_compatibility": 0.45,
+      "b_similarity": 0.34,
+      "c_patient": 0.46,
+      "d_resource": 0.2,
       "tau_c": 0.42,
       "max_candidates": 24
     },

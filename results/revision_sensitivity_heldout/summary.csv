@@ -1,0 +1,11 @@
+variant,planned_cells,completed_incidents,condition_rows,verification_failures,wall_seconds,recall,precision,bsr,rwh,uer,drr
+default,80,80,80,0,15.851,1.0,1.0,1.0,0.0,0.0,0.0
+candidate_similarity_high,80,80,80,0,15.846,1.0,1.0,1.0,0.0,0.0,0.0
+candidate_patient_high,80,80,80,0,16.001,1.0,1.0,1.0,0.0,0.0,0.0
+candidate_resource_high,80,80,80,0,15.691,1.0,1.0,1.0,0.0,0.0,0.0
+candidate_threshold_low,80,80,80,0,15.651,1.0,1.0,1.0,0.0,0.0,0.0
+candidate_threshold_high,80,80,80,0,15.757,1.0,1.0,1.0,0.0,0.0,0.0
+candidate_cap_8,80,80,80,0,15.725,1.0,1.0,1.0,0.0,0.0,0.0
+attribution_semantic_high,80,80,80,0,15.746,1.0,1.0,1.0,0.0,0.0,0.0
+attribution_threshold_high,80,80,80,0,15.615,1.0,1.0,1.0,0.0,0.0,0.0
+repair_cutoff_high,80,80,80,0,15.769,1.0,1.0,1.0,0.0,0.0,0.0

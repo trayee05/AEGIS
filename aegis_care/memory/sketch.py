@@ -94,7 +94,13 @@ class SketchEncoder:
                incident_id: str = "global") -> List[int]:
         """Produce the quantised, receiver-scoped sketch that may travel."""
         dense = self.encode_dense(text)
-        projected = dense @ self._projection(self.scope_key(recipient, purpose, incident_id))
+        # NumPy's macOS BLAS matmul can emit spurious floating-point warnings
+        # for finite inputs here. The explicit contraction is deterministic and
+        # avoids that backend behaviour for this small 512 x 64 projection.
+        projected = np.einsum(
+            "i,ij->j", dense,
+            self._projection(self.scope_key(recipient, purpose, incident_id)),
+        )
         norm = np.linalg.norm(projected)
         if norm > 0:
             projected = projected / norm

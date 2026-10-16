@@ -63,11 +63,12 @@ RESULTS_DIR = Path(os.environ.get("AEGIS_RESULTS_DIR") or (PROJECT_ROOT / "resul
 
 @dataclass(frozen=True)
 class CandidateScoringConfig:
-    """Weights for score(s, v) = a*explicit + b*sim + c*compat  (Section 6.2)."""
+    """Paper Eq. (2): explicit edges score 1; latent candidates use e/p/r."""
 
     a_explicit: float = 1.0
-    b_similarity: float = 0.55
-    c_compatibility: float = 0.45
+    b_similarity: float = 0.34
+    c_patient: float = 0.46
+    d_resource: float = 0.20
     tau_c: float = 0.42          # candidate threshold
     max_candidates: int = 24     # candidate budget per runtime per frontier round
 

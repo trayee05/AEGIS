@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import pytest
 
+from aegis_care.agents.model import OpenAICompatibleModel
 from aegis_care.fhir.store import FHIRStore
 from aegis_care.memory.models import (
     ArtifactType,
@@ -41,7 +42,11 @@ class TestCrypto:
         assert not kr.verify("registration", {"a": 1}, sig)
 
     def test_identities_are_deterministic(self):
-        assert KeyRing().public_key_b64("nursing") == KeyRing().public_key_b64("nursing")
+        test_seed = b"reproducible-test-root-seed-32byte"
+        assert KeyRing(test_seed).public_key_b64("nursing") == KeyRing(test_seed).public_key_b64("nursing")
+
+    def test_default_signing_keys_differ_between_environments(self):
+        assert KeyRing().public_key_b64("nursing") != KeyRing().public_key_b64("nursing")
 
     def test_commitments_are_stable_and_order_independent(self):
         assert commit({"a": 1, "b": 2}) == commit({"b": 2, "a": 1})
@@ -61,6 +66,18 @@ class TestCrypto:
         a = receiver_scoped_token("S1001", "nursing", kr.incident_key("INC-1"))
         b = receiver_scoped_token("S1001", "nursing", kr.incident_key("INC-2"))
         assert a != b
+
+
+def test_unavailable_model_is_not_silently_counted_as_deterministic(monkeypatch):
+    import httpx
+
+    def unavailable(*args, **kwargs):
+        raise httpx.ConnectError("unavailable")
+
+    monkeypatch.setattr(httpx, "post", unavailable)
+    model = OpenAICompatibleModel(base_url="http://localhost:1/v1", model="test")
+    with pytest.raises(RuntimeError, match="no model result was produced"):
+        model.compose_identity({"query_text": "synthetic test"})
 
 
 # ======================================================================

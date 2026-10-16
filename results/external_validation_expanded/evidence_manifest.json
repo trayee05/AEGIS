@@ -1,0 +1,175 @@
+{
+  "artifacts": {
+    "EXTERNAL_VALIDATION.md": {
+      "bytes": 3504,
+      "hash_input": "newline-normalised",
+      "sha256": "b99f53ab90df37b6b9d90882711af36e07ffe808809785768dcfd65a56b39e6b"
+    },
+    "fig1_safety_utility.png": {
+      "bytes": 61511,
+      "hash_input": "raw",
+      "sha256": "dd61eb98e4ccb6827c80b3054def15a5709356b0d24cccbc0b38425d2049d5c9"
+    },
+    "fig2_recall_precision_bsr.png": {
+      "bytes": 36870,
+      "hash_input": "raw",
+      "sha256": "8d84386c46afa7aea319af72732abb2d287e78bbfef5dc200c9320e190b8e499"
+    },
+    "fig3_provenance_sensitivity.png": {
+      "bytes": 43496,
+      "hash_input": "raw",
+      "sha256": "83500ba5e0f2ef4656eec12b7c15266b6e689e63c85ac39e741ce80113e73ef8"
+    },
+    "fig4_overhead.png": {
+      "bytes": 29483,
+      "hash_input": "raw",
+      "sha256": "1cd317d14cbde2d44aa65872a9ac38e95be73d33f438bb47dce62414c7613717"
+    },
+    "metrics.csv": {
+      "bytes": 83955,
+      "hash_input": "newline-normalised",
+      "sha256": "9040719518e7eaf980c6ce7995972cfd57f22817be6d484c71207a18dbadde03"
+    },
+    "report.md": {
+      "bytes": 12228,
+      "hash_input": "newline-normalised",
+      "sha256": "62632b2ac6a8ef40e37cffcac027627555541852583f13ac436a533d97cb9a19"
+    },
+    "results.json": {
+      "bytes": 538158,
+      "hash_input": "newline-normalised",
+      "sha256": "61f69f1b8ebe3ed7f9e3f0e972076713a0af025d75205a108002ff3b091189da"
+    }
+  },
+  "claim": {
+    "statement": "AEGIS-Care was evaluated on synthetic FHIR records using paired, deterministic recovery scenarios. This is not clinical validation, a medical-device claim, or evidence of improved patient outcomes.",
+    "synthetic_evidence_only": true,
+    "tier": "external-format mechanism validation"
+  },
+  "data_source": {
+    "bundles_loaded": 30,
+    "bundles_seen": 31,
+    "claim_tier": "external-format mechanism validation",
+    "patients_loaded": 30,
+    "profiles_seen": {
+      "http://hl7.org/fhir/StructureDefinition/bmi": 251,
+      "http://hl7.org/fhir/StructureDefinition/bodyheight": 309,
+      "http://hl7.org/fhir/StructureDefinition/bodytemp": 42,
+      "http://hl7.org/fhir/StructureDefinition/bodyweight": 322,
+      "http://hl7.org/fhir/StructureDefinition/bp": 322,
+      "http://hl7.org/fhir/StructureDefinition/headcircum": 83,
+      "http://hl7.org/fhir/StructureDefinition/heartrate": 322,
+      "http://hl7.org/fhir/StructureDefinition/resprate": 322,
+      "http://hl7.org/fhir/StructureDefinition/vitalsigns": 1973,
+      "http://hl7.org/fhir/us/core/StructureDefinition/pediatric-bmi-for-age": 109,
+      "http://hl7.org/fhir/us/core/StructureDefinition/pediatric-weight-for-height": 83,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition": 702,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-encounter": 1220,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medicationrequest": 918,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-lab": 3434,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient": 30,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-pulse-oximetry": 13,
+      "http://hl7.org/fhir/us/core/StructureDefinition/us-core-smokingstatus": 309
+    },
+    "references_rewritten": 19258,
+    "resources_ignored": {
+      "AllergyIntolerance": 41,
+      "CarePlan": 105,
+      "CareTeam": 105,
+      "Claim": 2138,
+      "Device": 2,
+      "DiagnosticReport": 1943,
+      "DocumentReference": 1220,
+      "ExplanationOfBenefit": 1220,
+      "ImagingStudy": 50,
+      "Immunization": 495,
+      "Medication": 89,
+      "MedicationAdministration": 89,
+      "Procedure": 1911,
+      "Provenance": 30,
+      "SupplyDelivery": 60
+    },
+    "resources_loaded": {
+      "Condition": 702,
+      "Encounter": 1220,
+      "MedicationRequest": 918,
+      "Observation": 7074,
+      "Patient": 30
+    },
+    "source_files": [
+      "aegis_synthea_r4_nov2021.zip"
+    ],
+    "source_label": "Synthea public sample FHIR R4",
+    "source_sha256": {
+      "aegis_synthea_r4_nov2021.zip": "6d3c5433bcae4791bc5c30469d1445b430fb4894d5c13bda15fee0584bbd7778"
+    },
+    "synthetic_evidence_only": true,
+    "unresolved_urn_references": 0,
+    "validation_errors": []
+  },
+  "evaluation": {
+    "condition_runs": 648,
+    "full_care": {
+      "bsr": 1.0,
+      "condition": "I",
+      "descendant_precision": 1.0,
+      "descendant_recall": 1.0,
+      "drr": 0.0,
+      "false_repair_rate": 0.0,
+      "n": 72,
+      "oh_capsule_bytes": 11785.0972,
+      "oh_fhir_reads": 25.5694,
+      "oh_model_calls": 16.0556,
+      "oh_replays": 9.0972,
+      "oh_wall_seconds": 0.1104,
+      "rts": 1.0,
+      "rwh": 0.0,
+      "uer": 0.0
+    },
+    "incidents": 72,
+    "verification_failures": [],
+    "wall_seconds": 555.039
+  },
+  "generated_at": "2026-10-16T10:58:43.756364+00:00",
+  "hash_method": {
+    "algorithm": "sha256",
+    "note": "Text artifacts are hashed after CRLF/CR to LF normalisation so a seal survives checkout on any platform; binary artifacts are hashed byte-for-byte.",
+    "text_suffixes": [
+      ".csv",
+      ".json",
+      ".md",
+      ".txt",
+      ".yaml",
+      ".yml"
+    ]
+  },
+  "limitations": [
+    "All records are synthetic Synthea records; no real patient data or clinical outcomes are used.",
+    "The deterministic clinical composer validates recovery mechanics, not open-ended LLM behaviour.",
+    "The external run validates FHIR R4 shape and source independence, not hospital workflow integration.",
+    "Family F3 adds a deterministic restricted-field incident overlay because Synthea does not encode the study's local role policy.",
+    "Thresholds are fixed implementation defaults; the original pilot-selection record is unavailable, and this is not a prospective clinical study."
+  ],
+  "runtime": {
+    "command": "python -m aegis_care.cli external-validate --fhir <path> --limit-patients 30 --base-tasks 24 --tasks-per-family 3 --task-seeds 0 1 --out results/external_validation_expanded",
+    "packages": {
+      "aegis-care": "not-installed",
+      "cryptography": "50.0.2",
+      "fastapi": "0.128.8",
+      "httpx": "0.28.1",
+      "matplotlib": "3.9.4",
+      "numpy": "2.0.2",
+      "pandas": "2.3.3",
+      "pydantic": "2.13.5",
+      "pytest": "8.4.2",
+      "scikit-learn": "1.6.1"
+    },
+    "platform": "macOS-26.4.1-arm64-arm-64bit",
+    "python": "3.9.6 (default, Apr  7 2026, 02:38:40) \n[Clang 21.0.0 (clang-2100.0.123.102)]"
+  },
+  "schema": "aegis-evidence-manifest/v2",
+  "verification": {
+    "experiment_verification_failures": [],
+    "loader_validation_errors": []
+  }
+}

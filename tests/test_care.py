@@ -12,7 +12,9 @@ from aegis_care.care.capsule import (
     CapsuleMinter,
     band_for,
 )
+from aegis_care.care.candidate import CandidateDiscoverer
 from aegis_care.care.coordinator import CAREOptions, RecoveryCoordinator
+from aegis_care.config import CONFIG
 from aegis_care.incident.masks import ProvenanceMask
 from aegis_care.incident.scenarios import FAMILIES, FAMILY_INFO
 from aegis_care.memory.models import ArtifactType, MemoryState
@@ -154,6 +156,27 @@ class TestCapsules:
 
 # ======================================================================
 class TestCARELoop:
+    def test_candidate_score_matches_paper_equation(self, env, f1_incident):
+        seed = env.find_artifact(f1_incident.seed_key)
+        runtime = env.runtime(Role.NURSING)
+        capsule = CapsuleMinter(env.keyring, env.encoder).mint(
+            seed, incident_id=f1_incident.incident_id,
+            recipient=Role.NURSING.value, issuer="coordinator")
+        discoverer = CandidateDiscoverer(env.encoder, CONFIG.candidate)
+        incident_key = env.keyring.incident_key(f1_incident.incident_id)
+        candidates = discoverer.discover(
+            runtime, capsule, incident_key=incident_key,
+            known_bad_commitments=set(), use_explicit=False)
+        target = next(c for c in candidates if c.memory_key in f1_incident.true_contaminated)
+        artifact = env.find_artifact(target.memory_key)
+        similarity = discoverer._similarity(runtime, artifact, capsule)
+        patient = discoverer.patient_compatibility(artifact, capsule, incident_key)
+        resource = float(discoverer._support_overlap(artifact, capsule, incident_key))
+        expected = (0.34 * similarity + 0.46 * patient + 0.20 * resource)
+        if resource:
+            expected = max(expected, CONFIG.candidate.tau_c + 0.05)
+        assert target.score == pytest.approx(expected)
+
     def test_recovers_all_descendants(self, recovered):
         incident, result = recovered
         neutralised = set(result.confirmed)
