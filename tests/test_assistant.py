@@ -308,6 +308,7 @@ class TestAgenticBehaviour:
             "message": "yes", "role": "safety"}).json()
         assert body["action"] == "fix_everything"
         assert len(body["steps"]) >= 4
+        assert body["steps"][1].startswith("4 record(s) had inherited the error")
         assert body["ui"]["recovered"] is True
         assert "residual harm" in body["reply"].lower()
         assert client.get("/api/patients").json()["count"] > 0

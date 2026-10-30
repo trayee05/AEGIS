@@ -162,5 +162,52 @@ def route(message: str, role: str, actions: Sequence[Action],
     }
 
 
-__all__ = ["route", "configured", "api_key", "AssistantUnavailable",
+def generate_json(system: str, user: str, schema: Dict[str, Any], *,
+                  max_output_tokens: int = 220,
+                  model: str = DEFAULT_MODEL) -> Dict[str, Any]:
+    """One structured-output call for the Sentinel (triage and briefing).
+
+    Same discipline as `route`: short prompt, JSON schema, hard output cap,
+    temperature 0. Returns {"data": ..., "tokens": ...}; raises
+    AssistantUnavailable on any failure so callers can fall back locally.
+    """
+    key = api_key()
+    if not key:
+        raise AssistantUnavailable("No Gemini API key. Set GEMINI_API_KEY in the environment.")
+    payload = {
+        "systemInstruction": {"parts": [{"text": system}]},
+        "contents": [{"role": "user", "parts": [{"text": user[:1600]}]}],
+        "generationConfig": {
+            "temperature": 0,
+            "maxOutputTokens": max_output_tokens,
+            "responseMimeType": "application/json",
+            "responseSchema": schema,
+        },
+    }
+    try:
+        response = httpx.post(f"{API_ROOT}/{model}:generateContent", params={"key": key},
+                              json=payload, timeout=REQUEST_TIMEOUT)
+    except httpx.HTTPError as exc:
+        raise AssistantUnavailable(f"could not reach Gemini: {exc}") from exc
+    if response.status_code in (401, 403):
+        raise AssistantUnavailable("Gemini rejected the API key")
+    if response.status_code == 429:
+        raise AssistantUnavailable("Gemini rate limit reached; try again shortly")
+    if response.status_code >= 400:
+        raise AssistantUnavailable(f"Gemini returned {response.status_code}")
+    body = response.json()
+    try:
+        text = body["candidates"][0]["content"]["parts"][0]["text"]
+        data = json.loads(text)
+    except (KeyError, IndexError, json.JSONDecodeError) as exc:
+        match = re.search(r"\{.*\}", locals().get("text", "") or "", re.S)
+        if not match:
+            raise AssistantUnavailable("Gemini returned unparseable output") from exc
+        data = json.loads(match.group(0))
+    usage = body.get("usageMetadata") or {}
+    return {"data": data, "tokens": {"input": usage.get("promptTokenCount", 0),
+                                     "output": usage.get("candidatesTokenCount", 0)}}
+
+
+__all__ = ["route", "generate_json", "configured", "api_key", "AssistantUnavailable",
            "DEFAULT_MODEL", "MAX_OUTPUT_TOKENS"]

@@ -101,7 +101,7 @@ Each is a deliberate, documented choice rather than an omission.
    match; the record content is synthetic. Swapping in the real sandbox means replacing
    `fhir/store.py` behind the same interface.
 2. **Deterministic composer as the default model.** Section 9.3 asks for temperature zero;
-   this goes further and removes sampling entirely, which makes all 900 condition runs
+   this goes further and removes sampling entirely, which makes all 270 committed condition runs
    exactly reproducible. The real-model path is implemented and selectable.
 3. **Hashing sketch encoder instead of a downloaded sentence transformer.** Preserves the
    "frozen encoder + random projection + quantisation" structure while keeping runs

@@ -65,11 +65,15 @@ python -m aegis_care.cli privacy       # empirical leakage attacks on our own in
 python -m aegis_care.cli experiment    # the full paired matrix -> results/
 python -m aegis_care.cli external-validate --fhir synthea_fhir.zip  # external-format proof
 python -m aegis_care.cli serve         # dashboard at http://127.0.0.1:8000
-pytest -q                              # 225 tests
+pytest -q                              # 261 passed, 1 skipped on Python 3.12
 
 python scripts/check_reproducible.py               # committed results must re-run identically
 python scripts/reseal_evidence.py results/external_validation --dry-run
 ```
+
+On macOS, use Python 3.10 or newer and `./scripts/run_demo.sh` for a fresh
+synthetic case database and a guard against an older server occupying port 8000.
+See the [presentation runbook](docs/DEMO_RUNBOOK.md) for the live walkthrough.
 
 `pytest` writes its evidence artifacts to a temporary directory, never to `results/`, so a
 test run cannot overwrite the committed evidence package. Set `AEGIS_RESULTS_DIR` to
@@ -133,9 +137,10 @@ trajectory. Counterfactual replay examined them and left them untouched.
 
 ## Results
 
-Full matrix: 4 families × 3 depths × 5 provenance conditions × 9 recovery conditions
-= **900 condition runs over 100 incidents in ~83 s**. Regenerate with
-`python -m aegis_care.cli experiment`.
+Current committed matrix: 4 families × 3 depths × 3 provenance conditions
+(complete, random40, targeted) × 9 recovery conditions = **270 condition runs
+over 30 incidents**. `python scripts/check_reproducible.py` re-runs and compares
+every metric column. Regenerate with `python -m aegis_care.cli experiment`.
 
 ### Evidence ladder and public Synthea validation
 
@@ -171,8 +176,8 @@ workflow is meant to surface.
 | A | No recovery | 0.267 | 0.000 | 1.000 | 1.000 | 0.111 | 1.00 |
 | B | Delete confirmed seed only | 0.267 | 0.000 | 1.000 | 1.000 | 0.082 | 1.00 |
 | C | Full memory reset | 0.000 | 1.000 | 0.271 | **0.000** | 0.000 | 1.00 |
-| D | Explicit-lineage quarantine | 0.180 | 0.398 | 0.980 | 0.995 | 0.049 | 0.00 |
-| E | Explicit-lineage clean replay | 0.180 | 0.398 | 0.980 | 1.000 | 0.047 | 0.00 |
+| D | Explicit-lineage quarantine | 0.144 | 0.478 | 0.983 | 0.996 | 0.037 | 0.00 |
+| E | Explicit-lineage clean replay | 0.144 | 0.478 | 0.983 | 1.000 | 0.035 | 0.00 |
 | F | Sketch-only quarantine | 0.000 | 1.000 | **0.336** | **0.241** | 0.000 | 0.00 |
 | G | Central raw-content oracle | 0.000 | 1.000 | 0.750 | 0.868 | **1.000** | 1.00 |
 | H | Complete private oracle graph | 0.000 | 1.000 | 1.000 | 1.000 | 0.000 | 1.00 |
@@ -195,34 +200,34 @@ Reading the table the way the proposal asks:
 
 Descendant recall as observable lineage is withheld:
 
-| Condition | complete | random20 | random40 | random60 | targeted |
-| --- | --- | --- | --- | --- | --- |
-| D / E (explicit lineage) | 1.000 | 0.446 | 0.263 | 0.100 | 0.183 |
-| F (sketch only) | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 |
-| **I (full CARE)** | **1.000** | **1.000** | **1.000** | **1.000** | **1.000** |
-| H (private oracle) | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 |
+| Condition | complete | random40 | targeted |
+| --- | --- | --- | --- |
+| D / E (explicit lineage) | 1.000 | 0.250 | 0.183 |
+| F (sketch only) | 1.000 | 1.000 | 1.000 |
+| **I (full CARE)** | **1.000** | **1.000** | **1.000** |
+| H (private oracle) | 1.000 | 1.000 | 1.000 |
 
-This is the result the whole design exists to produce: with complete provenance, explicit
-lineage is sufficient and the latent component earns nothing. As edges disappear,
-provenance-only recovery collapses while CARE holds — **at precision 1.000 and BSR 1.000**,
-which is what separates it from the sketch-only baseline that also holds recall.
+With complete provenance, explicit lineage recovers all descendants in this matrix,
+although D/E still have some false positives. As edges disappear, provenance-only
+recall falls while CARE holds at **precision 1.000 and BSR 1.000**. The sketch-only
+baseline also retains recall, but sacrifices clean state.
 
 ### A negative result, reported
 
-RQ1 hypothesised that *targeted* removal of cross-role and semantic-summary edges would harm
-provenance-only recovery **more** than random removal. Compared at matched realised edge
-loss, it did not:
+RQ1 hypothesised that *targeted* removal of cross-role and semantic-summary edges
+would harm provenance-only recovery **more** than random removal. In the current
+committed report, the only shared realised-loss bucket shows the opposite:
 
 | Condition | loss bucket | recall (targeted) | recall (random) | targeted worse by |
 | --- | --- | --- | --- | --- |
-| D | 25–50% | 0.500 | 0.260 | **−0.240** |
-| D | 50–75% | 0.104 | 0.063 | **−0.042** |
+| D | 25–50% | 0.500 | 0.250 | **−0.250** |
 
-The hypothesis is **not supported** in this benchmark. The explanation is structural: in a
-short derivation chain the dominant factor is whether the *first* edge survives. Random
-masking sometimes removes it; targeted masking, which prefers summary and cross-role edges,
-often leaves it intact. Section 10.2 of the proposal commits to publishing negative results,
-so this is reported rather than tuned away.
+The hypothesis is **not supported** by these runs. This bucket has only two
+targeted and ten random incidents, with mean realised losses of 0.500 and 0.383;
+it is an exploratory comparison, not an exact matched-loss test. A plausible
+structural explanation is that the first edge in a short chain dominates whether
+lineage traversal can proceed. Section 10.2 of the proposal commits to reporting
+negative results, so the result is retained.
 
 ### Empirical leakage
 
@@ -352,6 +357,46 @@ spinner.
 
 ---
 
+## The Sentinel: finding errors nobody reported
+
+CARE starts from a known-bad memory. The **Sentinel** (dashboard tab, for the safety,
+compliance and research workspaces) answers the question that comes first: *is
+anything wrong right now?* It patrols every runtime and the source registry every few
+seconds and runs one agent loop: **observe → detect → correlate → decide → act → verify**.
+
+| Detector | Compares each memory against | Catches |
+| --- | --- | --- |
+| Identity re-resolution | FHIR Patient search for the stored alias | F1 |
+| Work-order cross-check | the task named in its signed replay recipe | F1, F2 |
+| Lineage patient drift / cited-evidence ownership | its parent / the FHIR subject of what it cites | F2 |
+| Stale value | the current FHIR Observation | F4 |
+| Restricted-field exposure | the role field matrix | F3 |
+| Inherits a withdrawn record, content integrity, lineage coverage | lifecycle state, write-time commitment, lineage | spread, tamper, masking |
+| Chart mismatch, invalidated source, blocked handover, open report | the source registry | source errors |
+
+No detector reads benchmark instrumentation (`_true_parents`, `env.truth`,
+`true_contaminated`); a test enforces this, which is what makes the **blind drill**
+honest: plant a fault of a hidden family, and the Sentinel is scored against labels it
+cannot see. Across all four families and complete / 40%-lost / targeted lineage it finds
+every wrong memory with zero clean records flagged (`tests/test_sentinel.py`).
+
+Findings are traced to a root cause and grouped per trajectory. Containment seeds CARE at
+the **earliest** root only, lets lineage and latent search find the rest, re-scans, and
+runs a follow-up wave only for anything CARE did not reach — so even with lineage lost,
+only the true seed is withdrawn and every descendant is rebuilt from FHIR. With
+**autopilot** on this happens on detection; otherwise a person approves each plan. The
+agent never refiles a source chart itself: it shows the FHIR evidence and a reviewer
+approves.
+
+**Manual entry.** "Tell the Sentinel" takes a free-text report, identifies the patient and
+the kind of error, cross-checks the live detectors for corroborating evidence, and files it
+with safety (assistant memory) or compliance (source record). With `GEMINI_API_KEY` set,
+Gemini classifies the text and writes the situation brief from finding metadata only;
+without a key both run locally. Sentinel model calls are capped by
+`AEGIS_SENTINEL_MAX_CALLS` (default 80) and the brief is cached until the findings change.
+
+---
+
 ## The assistant
 
 Every role's console can be driven in plain language. Say *"yes I accidentally
@@ -405,7 +450,7 @@ locally and asks you to rephrase otherwise.
 
 ## Verification
 
-`pytest -q` runs 225 tests. Beyond ordinary unit coverage, each of the six **core invariants**
+`pytest -q` currently has 239 passing tests and 1 skipped test. Beyond ordinary unit coverage, each of the six **core invariants**
 of proposal Section 7.1 and each termination/safety property of Section 6.6 has an
 executable check in [`tests/test_invariants.py`](tests/test_invariants.py):
 
@@ -441,7 +486,7 @@ content actually changed.
 **The default model is deterministic, not an LLM.** Counterfactual replay is only sound if
 replaying identical inputs yields identical output. A frozen composer guarantees that
 absolutely, which removes "counterfactual instability" (Section 14) from the critical path
-of all 900 condition runs. The real-model adapter is provided and structured facts always
+of all 270 committed condition runs. The real-model adapter is provided and structured facts always
 come from FHIR, so the safety predicates never depend on sampling.
 
 **The sketch encoder is a frozen hashing encoder, not a downloaded transformer.** The

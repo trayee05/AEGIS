@@ -137,7 +137,7 @@ const ROLES = {
     question: "What is the blast radius, and is it contained?",
     blurb: "Run the containment loop end to end: find affected records, prove which were really affected, rebuild them, and keep the bad version out.",
     duties: ["Contain a reported error", "Track the blast radius", "Sign off safe resume"],
-    views: ["command", "graph"],
+    views: ["command", "sentinel", "graph"],
     home: "command",
     context: "Incident containment",
     note: "You coordinate recovery and never receive clinical content.",
@@ -150,7 +150,7 @@ const ROLES = {
     question: "Did anything leave a runtime that shouldn't have, and what needs a human?",
     blurb: "Audit every field that crossed a boundary, run the leakage tests, and clear the queue of records the system refused to guess at.",
     duties: ["Audit the data boundary", "Decide quarantined records", "Review the audit trail"],
-    views: ["assurance"],
+    views: ["assurance", "sentinel"],
     home: "assurance",
     context: "Assurance & review",
     note: "You see metadata and audit evidence, plus records escalated for review.",
@@ -163,7 +163,7 @@ const ROLES = {
     question: "Does the mechanism hold across conditions?",
     blurb: "The full experimental console: paired baselines, the provenance matrix, privacy attacks, and the hash-bound evidence package.",
     duties: ["Run the paired matrix", "Compare all nine conditions", "Verify the evidence package"],
-    views: ["overview", "incident", "care", "graph", "baselines", "privacy",
+    views: ["overview", "sentinel", "incident", "care", "graph", "baselines", "privacy",
             "evidence", "review", "experiment", "audit"],
     home: "overview",
     context: "Clinical memory incident recovery",
@@ -174,6 +174,7 @@ const ROLES = {
 
 const VIEW_LABELS = {
   records: "My Patients", command: "Incident Command", assurance: "Assurance",
+  sentinel: "Sentinel",
   overview: "Mission", incident: "Incident Lab", care: "CARE Recovery",
   graph: "Memory Graph", baselines: "Baselines", privacy: "Privacy Audit",
   evidence: "Evidence Center", review: "Review Queue",
@@ -253,7 +254,9 @@ function activateView(name, { scroll = true, focusTab = false } = {}) {
   if (name === "records") loadPatients();
   if (name === "command") initCommandView();
   if (name === "assurance") initAssuranceView();
-  if (scroll) window.scrollTo({ top: 0, behavior: "smooth" });
+  // The Sentinel lives in sentinel.js; it starts and stops its own patrol loop.
+  window.sentinelViewChanged?.(name);
+  if (scroll) window.scrollTo({ top: 0, behavior: "auto" });
 }
 
 function buildTabs() {
@@ -303,9 +306,13 @@ function initTabs() {
 
   document.addEventListener("click", (e) => {
     const target = e.target.closest("[data-view-target]");
-    if (target && role().views.includes(target.dataset.viewTarget)) {
-      activateView(target.dataset.viewTarget);
+    if (!target) return;
+    const view = target.dataset.viewTarget;
+    if (!STATE.role && !["overview", "evidence"].includes(view)) {
+      openRoleGate({ preferredRole: "researcher" });
+      return;
     }
+    if (role().views.includes(view)) activateView(view);
   });
 
   const fromHash = () => {
@@ -320,6 +327,29 @@ function initTabs() {
 
 /* ---------------- role gate & switcher ---------------- */
 let pendingRole = null;
+let pendingWorkspaceIntent = null;
+
+function openRoleGate({ preferredRole = null, intent = null } = {}) {
+  pendingWorkspaceIntent = intent;
+  $("role-gate").hidden = false;
+  document.body.classList.add("workspace-gate-open");
+  if (preferredRole) {
+    $("role-gate-grid").querySelector(`[data-role="${preferredRole}"]`)?.click();
+  }
+  window.requestAnimationFrame(() => {
+    const selected = $("role-gate-grid").querySelector('[aria-checked="true"]');
+    (selected || $("role-gate-grid").querySelector(".role-card"))?.focus({ preventScroll: true });
+    $("role-gate").scrollTop = 0;
+  });
+}
+
+function closeRoleGate() {
+  $("role-gate").hidden = true;
+  document.body.classList.remove("workspace-gate-open");
+  pendingWorkspaceIntent = null;
+  resetRoleGate();
+  $("btn-hero-agent").focus();
+}
 
 function renderRoleGate() {
   const grid = $("role-gate-grid");
@@ -335,8 +365,7 @@ function renderRoleGate() {
     });
     $("gate-confirm-copy").innerHTML =
       `<h2>${esc(selected.label)}</h2>
-       <p>${esc(selected.blurb)}</p>
-       <ul>${selected.duties.map((d) => `<li>${esc(d)}</li>`).join("")}</ul>`;
+       <p>${esc(selected.blurb)}</p>`;
     const go = $("gate-continue");
     go.disabled = false;
     go.textContent = `Continue as ${selected.short}`;
@@ -378,6 +407,7 @@ function renderRoleGate() {
   $("gate-continue").addEventListener("click", () => {
     if (pendingRole) selectRole(pendingRole, { firstRun: true });
   });
+  $("gate-back").addEventListener("click", closeRoleGate);
 }
 
 function resetRoleGate() {
@@ -403,12 +433,12 @@ function renderRoleMenu() {
      </div>
      <button class="role-menu-item role-menu-end" id="end-session-button" type="button" role="menuitem">
        <span class="role-menu-avatar" aria-hidden="true">↩</span>
-       <span><strong>End session</strong><small>Return to login before choosing another role</small></span>
+       <span><strong>End session</strong><small>Return to overview before choosing another role</small></span>
      </button>`;
   $("end-session-button").addEventListener("click", () => {
     closeRoleMenu();
     $("session-dialog-copy").textContent =
-      `You are leaving the ${current.label} workspace. You will return to role login; patient and incident data will not be reset.`;
+      `You are leaving the ${current.label} workspace. You will return to the overview; synthetic patient and incident data will not be reset.`;
     $("session-dialog").showModal();
   });
 }
@@ -441,6 +471,9 @@ function selectRole(id, { firstRun = false } = {}) {
   $("header-context").textContent = r.context;
   $("safety-role-note").textContent = r.note;
   $("role-gate").hidden = true;
+  document.body.classList.remove("workspace-gate-open", "public-home");
+  $("chat-toggle").hidden = false;
+  $("role-switch").querySelector(".role-switch-label").textContent = "Workspace locked";
 
   buildTabs();
   activateView(r.home, { scroll: false });
@@ -456,9 +489,17 @@ function selectRole(id, { firstRun = false } = {}) {
     renderAssistantWelcome();
     primeChat();
   }
-  if (firstRun) {
+  if (firstRun && !pendingWorkspaceIntent) {
     startTour(id);
   }
+  if (pendingWorkspaceIntent === "agent" && ["safety", "researcher"].includes(id)) {
+    toggleChat(true);
+    $("chat-input").value = "Demo an end-to-end recovery";
+    $("chat-input").focus();
+  } else if (pendingWorkspaceIntent === "manual" && id === "researcher") {
+    $("trajectory-theater").scrollIntoView({ behavior: "auto", block: "start" });
+  }
+  pendingWorkspaceIntent = null;
 }
 
 function endRoleSession() {
@@ -478,29 +519,48 @@ function endRoleSession() {
   $("tabs").innerHTML = "";
   $("tabs").hidden = true;
   resetRoleGate();
-  $("role-gate").hidden = false;
-  window.setTimeout(() => $("role-gate-grid").querySelector(".role-card")?.focus(), 80);
-  $("urgent-announcer").textContent = `${previous} session ended. Choose a role to begin a new protected session.`;
+  $("role-gate").hidden = true;
+  document.body.classList.add("public-home");
+  $("chat-toggle").hidden = true;
+  $("role-switch").querySelector(".role-switch-label").textContent = "Explore workspaces";
+  $("role-switch-name").textContent = "Choose role";
+  $("role-switch-avatar").textContent = "↗";
+  $("header-context").textContent = "Clinical memory incident recovery";
+  $("safety-role-note").textContent = "";
+  activateView("overview", { scroll: true });
+  $("urgent-announcer").textContent = `${previous} session ended. Overview is available; choose a role to begin a new session.`;
 }
 
 function initRoles() {
   renderRoleGate();
   $("role-switch").addEventListener("click", (e) => {
     e.stopPropagation();
+    if (!STATE.role) { openRoleGate(); return; }
     $("role-menu").hidden ? openRoleMenu() : closeRoleMenu();
   });
   document.addEventListener("click", (e) => {
     if (!e.target.closest("#role-menu") && !e.target.closest("#role-switch")) closeRoleMenu();
   });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeRoleMenu(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (!$("role-gate").hidden) closeRoleGate();
+    else closeRoleMenu();
+  });
   $("confirm-end-session").addEventListener("click", endRoleSession);
 
   const saved = storedRole();
   if (saved) {
     selectRole(saved);
   } else {
-    $("role-gate").hidden = false;
-    STATE.role = "researcher";       // a safe default until a choice is made
+    STATE.role = null;
+    $("role-gate").hidden = true;
+    document.body.classList.add("public-home");
+    $("tabs").hidden = true;
+    $("chat-toggle").hidden = true;
+    $("role-switch").querySelector(".role-switch-label").textContent = "Explore workspaces";
+    $("role-switch-name").textContent = "Choose role";
+    $("role-switch-avatar").textContent = "↗";
+    activateView("overview", { scroll: false });
   }
 }
 
@@ -512,52 +572,13 @@ function renderRoleSurface() {
   if (id === "compliance") initAssuranceView();
 }
 
-/* ---------------- accessible display preferences & persistent help ---------------- */
-const DISPLAY_KEY = "aegis-display";
-
-function readDisplayPreferences() {
-  try { return JSON.parse(localStorage.getItem(DISPLAY_KEY) || "{}"); }
-  catch (e) { return {}; }
-}
-
-function applyDisplayPreferences(next) {
-  document.documentElement.dataset.textSize = next.textSize === "large" ? "large" : "normal";
-  document.documentElement.dataset.contrast = next.contrast === "high" ? "high" : "normal";
-  document.documentElement.dataset.motion = next.motion === "reduce" ? "reduce" : "normal";
-  try { localStorage.setItem(DISPLAY_KEY, JSON.stringify(next)); } catch (e) { /* storage blocked */ }
-  $("pref-large-text").checked = next.textSize === "large";
-  $("pref-high-contrast").checked = next.contrast === "high";
-  $("pref-reduce-motion").checked = next.motion === "reduce";
-}
-
-function openAccessibility() {
-  const dialog = $("accessibility-dialog");
-  applyDisplayPreferences(readDisplayPreferences());
-  if (!dialog.open) dialog.showModal();
-}
-
-function initAccessibility() {
-  applyDisplayPreferences(readDisplayPreferences());
-  $("accessibility-button").addEventListener("click", openAccessibility);
-  $("gate-accessibility").addEventListener("click", openAccessibility);
-  [["pref-large-text", "textSize", "large"],
-   ["pref-high-contrast", "contrast", "high"],
-   ["pref-reduce-motion", "motion", "reduce"]].forEach(([control, key, enabled]) => {
-    $(control).addEventListener("change", (e) => {
-      const prefs = readDisplayPreferences();
-      prefs[key] = e.target.checked ? enabled : "normal";
-      applyDisplayPreferences(prefs);
-      $("urgent-announcer").textContent = `${e.target.closest("label").querySelector("strong").textContent} ${e.target.checked ? "on" : "off"}`;
-    });
-  });
-  $("preferences-reset").addEventListener("click", () => {
-    applyDisplayPreferences({ textSize: "normal", contrast: "normal", motion: "normal" });
-    $("urgent-announcer").textContent = "Display settings reset";
-  });
-}
-
+/* ---------------- persistent help ---------------- */
 function initPersistentHelp() {
   $("help-button").addEventListener("click", () => {
+    if (!STATE.role && $("role-gate").hidden) {
+      openRoleGate();
+      return;
+    }
     if (!$("role-gate").hidden) {
       $("role-gate-grid").querySelector(".role-card")?.focus();
       $("urgent-announcer").textContent = "Choose your role, then confirm your workspace.";
@@ -607,7 +628,6 @@ async function boot() {
   initTheme();
   initTabs();
   initTour();
-  initAccessibility();
   initPersistentHelp();
   const health = await api("/api/health");
   $("version").textContent = `v${health.version} · ${health.model}`;
@@ -890,6 +910,10 @@ function initQuickLab() {
   $("trajectory-canvas").innerHTML = '<div class="trajectory-empty">Select an incident family, then inject a synthetic failure to reveal its dependency field.</div>';
 
   $("btn-quick-inject").addEventListener("click", async () => {
+    if (!STATE.role) {
+      openRoleGate({ preferredRole: "researcher", intent: "manual" });
+      return;
+    }
     const btn = $("btn-quick-inject");
     btn.disabled = true;
     $("btn-quick-recover").disabled = true;
@@ -932,6 +956,10 @@ function initQuickLab() {
   });
 
   $("btn-quick-recover").addEventListener("click", async () => {
+    if (!STATE.role) {
+      openRoleGate({ preferredRole: "researcher", intent: "manual" });
+      return;
+    }
     if (!STATE.quickIncident) return;
     const btn = $("btn-quick-recover");
     btn.disabled = true;
@@ -960,8 +988,19 @@ function initQuickLab() {
     }
   });
 
+  $("btn-hero-agent").addEventListener("click", () => {
+    if (!STATE.role) { openRoleGate({ preferredRole: "safety", intent: "agent" }); return; }
+    if (["safety", "researcher"].includes(STATE.role)) {
+      toggleChat(true);
+      $("chat-input").value = "Demo an end-to-end recovery";
+      $("chat-input").focus();
+    } else {
+      toast("Open the Safety or Researcher workspace for this demo");
+    }
+  });
   $("btn-hero-inject").addEventListener("click", () => {
-    $("trajectory-theater").scrollIntoView({ behavior: "smooth", block: "center" });
+    if (!STATE.role) { openRoleGate({ preferredRole: "researcher", intent: "manual" }); return; }
+    $("trajectory-theater").scrollIntoView({ behavior: "auto", block: "center" });
     window.setTimeout(() => $("btn-quick-inject").click(), 450);
   });
 
@@ -1787,23 +1826,34 @@ $("btn-experiment").addEventListener("click", async () => {
 });
 
 /* ---------------- audit ---------------- */
+function renderEventLog(log, events) {
+  if (!events.length) {
+    log.innerHTML = '<p class="event-empty">No events recorded yet.</p>';
+    return;
+  }
+  const rows = events.map((event) => {
+    const time = String(event.at ?? "");
+    const kind = String(event.kind ?? "").replace(/_/g, " ");
+    return `<tr>
+      <td data-label="Time"><time datetime="${esc(time)}">${esc(time.slice(11, 23))}</time></td>
+      <td data-label="Actor" class="event-actor">${esc(event.actor)}</td>
+      <td data-label="Event" class="event-kind">${esc(kind)}</td>
+      <td data-label="Record" class="event-subject">${esc(event.subject || "—")}</td>
+    </tr>`;
+  }).join("");
+  log.innerHTML = `<table class="event-table">
+    <thead><tr><th scope="col">Time</th><th scope="col">Actor</th><th scope="col">Event</th><th scope="col">Record</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
 async function loadAudit() {
   const log = $("audit-log");
   try {
     const r = await api("/api/events?limit=300");
-    log.innerHTML = "";
-    r.events.forEach((e) => {
-      const row = el("div", "row");
-      row.innerHTML =
-        `<span class="muted">${esc(String(e.at).slice(11, 23))}</span>
-         <span class="actor">${esc(e.actor)}</span>
-         <span class="kind">${esc(e.kind)}</span>
-         <span class="subject">${esc(e.subject ?? "")}</span>`;
-      log.appendChild(row);
-    });
-    if (!r.events.length) log.innerHTML = '<span class="muted">No events yet.</span>';
+    renderEventLog(log, r.events);
   } catch (e) {
-    log.innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`;
+    log.innerHTML = `<p class="event-error">${esc(e.message)}</p>`;
   }
 }
 $("btn-audit-refresh").addEventListener("click", loadAudit);
@@ -1974,7 +2024,7 @@ async function selectPatient(token, { reveal = false } = {}) {
     renderPatientRecord(data, out);
     if (reveal && window.matchMedia("(max-width: 1050px)").matches) {
       out.scrollIntoView({
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        behavior: "auto",
         block: "start",
       });
     }
@@ -2929,20 +2979,9 @@ async function loadAssuranceTrail() {
   const log = $("assurance-log");
   try {
     const r = await api("/api/events?limit=300");
-    log.innerHTML = "";
-    if (!r.events.length) {
-      log.innerHTML = '<span class="muted">No events recorded yet.</span>';
-      return;
-    }
-    r.events.forEach((e) => {
-      log.appendChild(el("div", "row",
-        `<span class="muted">${esc(String(e.at).slice(11, 23))}</span>
-         <span class="actor">${esc(e.actor)}</span>
-         <span class="kind">${esc(e.kind)}</span>
-         <span class="subject">${esc(e.subject ?? "")}</span>`));
-    });
+    renderEventLog(log, r.events);
   } catch (e) {
-    log.innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`;
+    log.innerHTML = `<p class="event-error">${esc(e.message)}</p>`;
   }
 }
 
@@ -2996,16 +3035,20 @@ function markTourSeen(id) {
   } catch (e) { /* storage blocked */ }
 }
 
-const TOUR = { steps: [], at: 0, id: null };
+const TOUR = { steps: [], at: 0, id: null, pending: null };
 
 function startTour(id, { force = false } = {}) {
   const steps = TOURS[id];
   if (!steps || (!force && seenTours().includes(id))) return;
+  if (TOUR.pending !== null) window.cancelAnimationFrame(TOUR.pending);
   TOUR.steps = steps;
   TOUR.at = 0;
   TOUR.id = id;
-  // Let the role's views paint before anchoring to them.
-  window.setTimeout(() => showTourStep(), 650);
+  // Paint the role's view before anchoring, without interrupting a later action.
+  TOUR.pending = window.requestAnimationFrame(() => {
+    TOUR.pending = null;
+    if (TOUR.id === id) showTourStep();
+  });
 }
 
 function showTourStep() {
@@ -3018,7 +3061,7 @@ function showTourStep() {
   document.querySelectorAll(".coach-target").forEach((n) =>
     n.classList.remove("coach-target"));
   target.classList.add("coach-target");
-  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  target.scrollIntoView({ behavior: "auto", block: "center" });
 
   $("coach-step").textContent = `${TOUR.at + 1} of ${TOUR.steps.length}`;
   $("coach-title").textContent = title;
@@ -3041,10 +3084,15 @@ function showTourStep() {
 }
 
 function endTour() {
+  if (TOUR.pending !== null) window.cancelAnimationFrame(TOUR.pending);
+  TOUR.pending = null;
   $("coach").hidden = true;
   document.querySelectorAll(".coach-target").forEach((n) =>
     n.classList.remove("coach-target"));
   if (TOUR.id) markTourSeen(TOUR.id);
+  TOUR.steps = [];
+  TOUR.at = 0;
+  TOUR.id = null;
 }
 
 function initTour() {
@@ -3153,7 +3201,7 @@ function initChat() {
   renderAssistantWelcome();
   renderSuggestions();
   refreshChatBudget();
-  if ($("role-gate").hidden) primeChat();
+  if (STATE.role) primeChat();
   loadOperatorCases();
   updateOperatorContext();
 }

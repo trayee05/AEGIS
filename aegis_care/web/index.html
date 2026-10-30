@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-text-size="large" data-contrast="high" data-motion="reduce">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,9 +7,10 @@
   <meta name="description" content="AEGIS-Care maps, repairs, and verifies the blast radius of compromised clinical AI memory.">
   <title>AEGIS-Care · Clinical AI Memory Recovery</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2307151b'/%3E%3Crect x='7' y='17' width='4' height='8' fill='%2372e4df'/%3E%3Crect x='14' y='8' width='4' height='17' fill='%2372e4df'/%3E%3Crect x='21' y='13' width='4' height='12' fill='%2372e4df'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="/static/styles.css?v=20261030-review2">
+  <link rel="stylesheet" href="/static/styles.css?v=20261031-audit1">
   <link rel="preload" as="font" type="font/woff2" href="/static/assets/fonts/Geist-Variable.woff2" crossorigin>
-  <link rel="stylesheet" href="/static/fx.css?v=20261030-fx1">
+  <link rel="stylesheet" href="/static/fx.css?v=20261031-audit1">
+  <link rel="stylesheet" href="/static/sentinel.css?v=20261031-sentinel1">
 </head>
 <body>
 <script>
@@ -17,10 +18,6 @@
   try {
     var t = localStorage.getItem("aegis-theme");
     if (t === "dark" || t === "light") document.documentElement.dataset.theme = t;
-    var display = JSON.parse(localStorage.getItem("aegis-display") || "{}");
-    if (display.textSize === "large") document.documentElement.dataset.textSize = "large";
-    if (display.contrast === "high") document.documentElement.dataset.contrast = "high";
-    if (display.motion === "reduce") document.documentElement.dataset.motion = "reduce";
   } catch (e) { /* storage blocked: fall through to the system preference */ }
 </script>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -33,8 +30,6 @@
     <div class="header-context" id="header-context">Clinical memory incident recovery</div>
     <div class="header-status">
       <button class="header-utility" id="help-button" type="button">Help</button>
-      <button class="header-utility" id="accessibility-button" type="button"
-              aria-haspopup="dialog">Accessibility</button>
       <button class="role-switch" id="role-switch" type="button" aria-haspopup="menu"
               aria-expanded="false" title="Current workspace and session options">
         <span class="role-switch-avatar" id="role-switch-avatar" aria-hidden="true"></span>
@@ -64,9 +59,11 @@
 
 
 <!-- ============ ROLE SELECTION (first run) ============ -->
-<div class="role-gate" id="role-gate" hidden>
+<div class="role-gate" id="role-gate" role="dialog" aria-modal="true"
+     aria-label="Choose a workspace" hidden>
   <div class="role-gate-inner">
-    <section class="login-hero" aria-label="AEGIS-Care secure workspace access">
+    <button class="gate-back" id="gate-back" type="button">← Back to overview</button>
+    <section class="login-hero" aria-label="AEGIS-Care role selection">
       <div class="login-hero-image" aria-hidden="true"></div>
       <div class="login-hero-scrim" aria-hidden="true"></div>
       <div class="login-hero-grid" aria-hidden="true"></div>
@@ -76,27 +73,27 @@
           <span class="brand-word">AEGIS<span>·CARE</span></span>
         </div>
         <div>
-          <span class="login-overline">Clinical AI memory assurance</span>
-          <h1>One system.<br><em>Four protected workspaces.</em></h1>
-          <p>Your workspace stays locked to the role you choose. AEGIS can guide work
-            inside it, but cannot move you into another role.</p>
+          <span class="login-overline">Synthetic incident workspace</span>
+          <h1>One incident.<br><em>Four responsibilities.</em></h1>
+          <p>Each role sees the records and actions relevant to its job. Choose one to explore the same incident from that view.</p>
         </div>
         <div class="login-trust-row" aria-label="Workspace safeguards">
           <span><b>01</b> Synthetic records</span>
-          <span><b>02</b> Role-locked session</span>
+          <span><b>02</b> Role-scoped demo</span>
           <span><b>03</b> Auditable actions</span>
         </div>
       </div>
     </section>
     <div class="role-gate-head">
-      <div class="gate-kicker">Begin a protected session</div>
-      <h2>Choose the workspace for your role</h2>
-      <p>Each workspace shows only the tasks and information that person needs. Choose
-        your role and confirm it. To use a different role later, end this session first.</p>
+      <div class="gate-kicker">Explore the synthetic demo</div>
+      <h2>Pick a role for this incident</h2>
+      <p>The safety officer contains it, the care team checks patient records, compliance
+        audits the boundary, and the researcher inspects the evidence. Choose a role to
+        run the live workflow.</p>
     </div>
     <div class="role-gate-layout">
       <div>
-        <h2 class="gate-section-title">1. Who are you signing in as?</h2>
+        <h2 class="gate-section-title">1. Choose a workspace</h2>
         <div class="role-gate-grid" id="role-gate-grid" role="radiogroup"
              aria-label="Choose your workspace role"></div>
       </div>
@@ -109,20 +106,7 @@
         <button class="btn gate-continue" id="gate-continue" type="button" disabled>
           Continue to workspace
         </button>
-        <button class="gate-accessibility" id="gate-accessibility" type="button">
-          Adjust text, contrast or motion
-        </button>
       </aside>
-    </div>
-    <div class="role-gate-foot">
-      <span class="gate-note-mark" aria-hidden="true">!</span>
-      <div>
-        <strong>Demo access — not production authentication.</strong>
-        This research prototype uses synthetic records. Choosing a role changes the
-        interface and service permissions, but it does not verify a real staff identity.
-        Production deployment requires identity-provider integration. Never enter real
-        patient information here.
-      </div>
     </div>
   </div>
 </div>
@@ -226,6 +210,135 @@
     <div id="command-outcome"></div>
   </section>
 
+  <!-- ============ SENTINEL · PROACTIVE ERROR DETECTION ============ -->
+  <section class="view" id="view-sentinel">
+    <div class="sn-band">
+      <div class="sn-band-grid">
+        <div class="sn-band-copy">
+          <div class="sn-eyebrow"><span class="sn-live-dot" id="sn-live-dot"></span> Autonomous error sentinel</div>
+          <h2>Finds what is wrong <em>before anyone reports it.</em></h2>
+          <p>Every few seconds the Sentinel re-checks each memory against trusted FHIR,
+            its own work order, its lineage and the access policy, traces what it finds
+            to a root cause, and hands that root to CARE. People can still report
+            anything it cannot see.</p>
+          <div class="sn-controls" role="group" aria-label="Sentinel controls">
+            <button class="sn-btn sn-btn-primary" id="sn-patrol" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+              Patrol now</button>
+            <label class="sn-switch"><input type="checkbox" id="sn-live" checked>
+              <span class="sn-switch-track" aria-hidden="true"><i></i></span>
+              <span>Live patrol <small id="sn-live-every">every 8s</small></span></label>
+            <label class="sn-switch"><input type="checkbox" id="sn-autopilot">
+              <span class="sn-switch-track" aria-hidden="true"><i></i></span>
+              <span>Autopilot <small>contain on detection</small></span></label>
+            <button class="sn-btn sn-btn-ghost" id="sn-jump-report" type="button">Report something</button>
+          </div>
+        </div>
+        <div class="sn-posture" id="sn-posture" aria-live="polite">
+          <div class="sn-radar" aria-hidden="true">
+            <svg viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r="56" class="sn-ring"/>
+              <circle cx="60" cy="60" r="38" class="sn-ring"/>
+              <circle cx="60" cy="60" r="20" class="sn-ring"/>
+              <path d="M60 60 L60 4 A56 56 0 0 1 108.5 32 Z" class="sn-sweep"/>
+              <g id="sn-blips"></g>
+            </svg>
+          </div>
+          <div class="sn-posture-copy">
+            <span class="sn-posture-kicker">Posture</span>
+            <strong id="sn-posture-label">Starting…</strong>
+            <span id="sn-posture-meta">First sweep pending</span>
+          </div>
+        </div>
+      </div>
+      <div class="sn-stats" id="sn-stats"></div>
+    </div>
+
+    <div class="sn-brief" id="sn-brief" aria-live="polite"></div>
+
+    <div class="sn-grid">
+      <div class="sn-main">
+        <div class="panel sn-panel">
+          <div class="sn-panel-head">
+            <div><h3>Open cases</h3>
+              <p class="hint">Findings grouped by the trajectory they came from and traced to a root cause.</p></div>
+            <span class="sn-count" id="sn-case-count">0</span>
+          </div>
+          <div id="sn-cases"></div>
+        </div>
+
+        <div class="panel sn-panel">
+          <div class="sn-panel-head">
+            <div><h3>Source-record queue</h3>
+              <p class="hint">Chart and handover problems. The agent proposes fixes it can verify against FHIR; a person approves them.</p></div>
+            <span class="sn-count" id="sn-source-count">0</span>
+          </div>
+          <div id="sn-source"></div>
+        </div>
+
+        <div class="panel sn-panel" id="sn-report-panel">
+          <div class="sn-panel-head">
+            <div><h3>Tell the Sentinel</h3>
+              <p class="hint">Describe what looks wrong in your own words. It works out the patient and the kind of error,
+                checks the live detectors for evidence, and files it with the right team.</p></div>
+            <span class="sn-model" id="sn-model-chip"></span>
+          </div>
+          <form class="sn-report" id="sn-report-form">
+            <label for="sn-report-text">What looks wrong?</label>
+            <textarea id="sn-report-text" rows="3" maxlength="1200" required
+              placeholder="e.g. The handover the assistant gave me for Rania Chowdhury lists a potassium result that I think belongs to someone else."></textarea>
+            <div class="sn-report-row">
+              <div class="field"><label for="sn-report-patient">Patient (optional)</label>
+                <input id="sn-report-patient" list="sn-patient-list" autocomplete="off" placeholder="Name or S-number"></div>
+              <datalist id="sn-patient-list"></datalist>
+              <div class="sn-examples" id="sn-examples" aria-label="Example reports"></div>
+              <button class="btn" type="submit" id="sn-report-submit">Triage &amp; file <span>→</span></button>
+            </div>
+          </form>
+          <div id="sn-report-result" aria-live="polite"></div>
+        </div>
+
+        <div class="panel sn-panel">
+          <div class="sn-panel-head">
+            <div><h3>Contained by the Sentinel</h3>
+              <p class="hint">Each containment is a CARE run with its own signed recovery certificate.</p></div>
+          </div>
+          <div id="sn-contained"></div>
+        </div>
+      </div>
+
+      <aside class="sn-side">
+        <div class="sn-trace" aria-label="Agent trace">
+          <div class="sn-trace-head"><span>Agent trace</span><b id="sn-trace-meta">idle</b></div>
+          <ol id="sn-trace" aria-live="polite"></ol>
+        </div>
+
+        <div class="panel sn-panel sn-drill">
+          <h3>Blind drill</h3>
+          <p class="hint">Plant a fault without telling the Sentinel where or what kind, then watch it hunt.
+            Scored against ground truth the Sentinel never reads.</p>
+          <div class="sn-drill-row">
+            <div class="field"><label for="sn-drill-prov">Lineage that survives</label>
+              <select id="sn-drill-prov">
+                <option value="complete">All lineage</option>
+                <option value="random40" selected>40% lost</option>
+                <option value="random60">60% lost</option>
+                <option value="targeted">Targeted removal</option>
+              </select></div>
+            <button class="btn ink" id="sn-drill" type="button">Plant hidden fault</button>
+          </div>
+          <div id="sn-drills"></div>
+        </div>
+
+        <div class="panel sn-panel">
+          <h3>Detectors</h3>
+          <p class="hint">What each check compares against. Lit tiles fired on the last sweep.</p>
+          <div class="sn-detectors" id="sn-detectors"></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
   <!-- ============ COMPLIANCE & REVIEW ============ -->
   <section class="view" id="view-assurance">
     <div class="role-intro">
@@ -282,12 +395,14 @@
     </div>
 
     <div class="assurance-panel" id="assurance-trail">
-      <div class="panel">
-        <h3>Append-only audit trail</h3>
-        <p class="hint">Nothing is destructively deleted. Withdrawn content becomes
-          non-servable and leaves a policy-controlled tombstone.</p>
-        <button class="btn ghost small" id="btn-assurance-trail-refresh">Refresh</button>
-        <div class="spacer"></div>
+      <div class="panel audit-panel">
+        <div class="audit-header">
+          <div>
+            <h3>Event history</h3>
+            <p class="hint">Recovery and access events, newest first. Withdrawn versions remain blocked.</p>
+          </div>
+          <button class="btn ghost small" id="btn-assurance-trail-refresh">Refresh</button>
+        </div>
         <div class="log" id="assurance-log"></div>
       </div>
     </div>
@@ -308,13 +423,14 @@
       </svg>
       <div class="hero-copy">
         <div class="eyebrow"><span></span> Recovery infrastructure for clinical AI</div>
-        <h2>One wrong memory.<br><span>Every dependency accounted for.</span></h2>
+        <h2>One wrong memory.<br><span>Every dependency<br>accounted for.</span></h2>
         <p>AEGIS-Care traces the blast radius of a compromised clinical memory, proves
           influence inside each authorised runtime, rebuilds safe state from FHIR, and
           prevents the withdrawn version from returning.</p>
         <div class="hero-actions">
-          <button class="hero-cta" id="btn-hero-inject"><span>Inject a trajectory</span><b aria-hidden="true">↗</b></button>
-          <button class="hero-secondary" data-view-target="evidence">Inspect the evidence <span>→</span></button>
+          <button class="hero-cta" id="btn-hero-agent"><span>Watch AEGIS act</span><b aria-hidden="true">↗</b></button>
+          <button class="hero-secondary" id="btn-hero-inject">Manual trajectory <span>→</span></button>
+          <button class="hero-secondary" data-view-target="evidence">Inspect evidence <span>→</span></button>
         </div>
       </div>
       <div class="hero-readout" aria-label="Live evidence readout">
@@ -364,7 +480,7 @@
         </div>
         <div class="proof-bars" id="proof-bars" aria-label="Recovery comparison chart">
           <div class="proof-bar" style="--score:.00;--delay:.05s"><span><b>0%</b><i></i></span><label>Seed delete<br><small>descendant recall</small></label></div>
-          <div class="proof-bar" style="--score:.44;--delay:.15s"><span><b>44%</b><i></i></span><label>Lineage only<br><small>descendant recall</small></label></div>
+          <div class="proof-bar" style="--score:.478;--delay:.15s"><span><b>48%</b><i></i></span><label>Lineage only<br><small>descendant recall</small></label></div>
           <div class="proof-bar muted-bar" style="--score:.00;--delay:.25s"><span><b>0%</b><i></i></span><label>Full reset<br><small>clean state retained</small></label></div>
           <div class="proof-bar care-bar" style="--score:1;--delay:.35s"><span><b>100%</b><i></i></span><label>Full CARE<br><small>recall · precision · retention</small></label></div>
         </div>
@@ -599,47 +715,18 @@
 
   <!-- ============ AUDIT ============ -->
   <section class="view" id="view-audit">
-    <div class="panel">
-      <h2>Append-only audit log</h2>
-      <p class="hint">Superseded content is never destructively deleted; it becomes
-        non-servable and is represented by a policy-controlled tombstone.</p>
-      <button class="btn ghost small" id="btn-audit-refresh">Refresh</button>
-      <div class="spacer"></div>
+    <div class="panel audit-panel">
+      <div class="audit-header">
+        <div>
+          <h2>Event history</h2>
+          <p class="hint">Recovery and access events, newest first. Withdrawn versions remain blocked.</p>
+        </div>
+        <button class="btn ghost small" id="btn-audit-refresh">Refresh</button>
+      </div>
       <div class="log" id="audit-log"></div>
     </div>
   </section>
 </main>
-
-<dialog class="accessibility-dialog" id="accessibility-dialog" aria-labelledby="accessibility-title">
-  <form method="dialog" class="accessibility-card">
-    <div class="accessibility-head">
-      <div>
-        <span class="section-kicker">Display settings</span>
-        <h2 id="accessibility-title">Make AEGIS easier to use</h2>
-      </div>
-      <button class="dialog-close" value="close" aria-label="Close accessibility settings">&times;</button>
-    </div>
-    <p>These settings are saved on this device. They do not change patient or incident data.</p>
-    <div class="preference-list">
-      <label class="preference-row">
-        <span><strong>Larger text</strong><small>Increase labels, instructions and patient details.</small></span>
-        <input id="pref-large-text" type="checkbox" role="switch">
-      </label>
-      <label class="preference-row">
-        <span><strong>High contrast</strong><small>Strengthen borders, text and focus indicators.</small></span>
-        <input id="pref-high-contrast" type="checkbox" role="switch">
-      </label>
-      <label class="preference-row">
-        <span><strong>Reduce motion</strong><small>Stop non-essential animation and smooth scrolling.</small></span>
-        <input id="pref-reduce-motion" type="checkbox" role="switch">
-      </label>
-    </div>
-    <div class="accessibility-actions">
-      <button class="btn ghost" id="preferences-reset" type="button">Reset display settings</button>
-      <button class="btn" value="close">Done</button>
-    </div>
-  </form>
-</dialog>
 
 <div class="coach" id="coach" hidden>
   <div class="coach-card" id="coach-card">
@@ -707,7 +794,8 @@
 <div class="toast-stack" id="toast-stack" role="status" aria-live="polite" aria-atomic="false"></div>
 <div class="sr-only" id="urgent-announcer" role="status" aria-live="assertive" aria-atomic="true"></div>
 
-<script src="/static/app.js?v=20261030-referrals1"></script>
-<script src="/static/fx.js?v=20261030-fx1" defer></script>
+<script src="/static/app.js?v=20261031-audit1"></script>
+<script src="/static/fx.js?v=20261031-audit1" defer></script>
+<script src="/static/sentinel.js?v=20261031-sentinel1"></script>
 </body>
 </html>

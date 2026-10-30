@@ -63,18 +63,20 @@ class TestSystem:
         assert 's.total, "records held"' not in script
         assert 'Complete memory history' in script
 
-    def test_nurse_workspace_exposes_plain_language_and_accessibility_controls(self, client):
+    def test_nurse_workspace_uses_readable_defaults_without_display_menu(self, client):
         page = client.get("/").text
         script = client.get("/static/app.js").text
 
         assert "Know what needs attention." in page
         assert "Find a patient" in page
         assert "Report a concern" in script
-        assert 'id="accessibility-dialog"' in page
-        assert 'id="pref-large-text"' in page
-        assert 'id="pref-high-contrast"' in page
-        assert 'id="pref-reduce-motion"' in page
-        assert "Demo access — not production authentication" in page
+        assert 'data-text-size="large" data-contrast="high" data-motion="reduce"' in page
+        assert 'id="accessibility-dialog"' not in page
+        assert 'id="accessibility-button"' not in page
+        assert 'id="gate-accessibility"' not in page
+        assert 'class="role-gate-foot"' not in page
+        assert "Explore the synthetic demo" in page
+        assert "Fully synthetic FHIR" in page
         assert "Nurses cannot approve quarantined records" in script
         assert 'if ($("role-gate").hidden) toggleChat(true);' not in script
 
@@ -82,8 +84,8 @@ class TestSystem:
         page = client.get("/").text
         script = client.get("/static/app.js").text
 
-        assert "Four protected workspaces" in page
-        assert "Role-locked session" in page
+        assert "Four responsibilities" in page
+        assert "Role-scoped demo" in page
         assert 'id="session-dialog"' in page
         assert 'id="confirm-end-session"' in page
         assert 'sessionStorage.setItem(ROLE_KEY, id)' in script

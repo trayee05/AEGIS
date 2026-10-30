@@ -168,7 +168,7 @@ body { font-feature-settings: "ss01", "cv11"; letter-spacing: -.005em; }
   box-shadow: var(--panel-shadow);
 }
 .stat, .notice, .cert, .held-card, .queue-card, .change-card, .outcome-card,
-.patient-row, .record-stat, .rollup, .cmd-step, .operator-case, .accessibility-card,
+.patient-row, .record-stat, .rollup, .cmd-step, .operator-case,
 .quick-summary, .stage { border-radius: var(--r-md); }
 .record-stats, .outcome-cards { gap: 10px; }
 input, select, textarea { border-radius: var(--r-sm) !important; }
@@ -183,13 +183,12 @@ input, select, textarea { border-radius: var(--r-sm) !important; }
 
 /* ---------------- spotlight cards ---------------- */
 .role-card, .stage, .proof-ribbon .metric, .patient-row, .outcome-card, .queue-card,
-.operator-case, .change-card, .accessibility-card {
+.operator-case, .change-card {
   position: relative;
   isolation: isolate;
 }
 .role-card::before, .stage::before, .proof-ribbon .metric::before, .patient-row::before,
-.outcome-card::before, .queue-card::before, .operator-case::before, .change-card::before,
-.accessibility-card::before {
+.outcome-card::before, .queue-card::before, .operator-case::before, .change-card::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -203,7 +202,7 @@ input, select, textarea { border-radius: var(--r-sm) !important; }
 }
 .role-card:hover::before, .stage:hover::before, .proof-ribbon .metric:hover::before,
 .patient-row:hover::before, .outcome-card:hover::before, .queue-card:hover::before,
-.operator-case:hover::before, .change-card:hover::before, .accessibility-card:hover::before { opacity: 1; }
+.operator-case:hover::before, .change-card:hover::before { opacity: 1; }
 
 /* ---------------- role gate ---------------- */
 .login-hero {
@@ -216,6 +215,72 @@ input, select, textarea { border-radius: var(--r-sm) !important; }
 .login-hero-image, .login-hero-grid { display: none; }
 .login-hero-scrim { background: linear-gradient(90deg, rgba(3, 20, 24, .96) 0%, rgba(3, 20, 24, .7) 45%, transparent 80%); }
 .login-trust-row b { font-family: var(--mono); color: var(--fx-aqua); }
+
+/* The mission is the public first screen; role choice opens over that same field. */
+body.workspace-gate-open { overflow: hidden; }
+.role-gate {
+  padding: clamp(8px, 2.5vw, 32px);
+  background: rgba(2, 17, 21, .72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.role-gate-inner {
+  max-width: 1380px;
+  min-height: 100%;
+  padding: 12px clamp(18px, 3vw, 42px) 32px;
+  background: var(--paper);
+  border: 1px solid rgba(95, 227, 216, .28);
+  border-radius: 26px;
+  box-shadow: 0 36px 100px rgba(0, 0, 0, .48);
+}
+.gate-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  margin: 0 0 14px;
+  padding: 0 12px;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.gate-back:hover { border-color: var(--accent); background: var(--chip-bg); }
+.login-hero { min-height: 180px; }
+.login-hero-content {
+  min-height: 180px;
+  padding: 18px 24px;
+  grid-template-columns: minmax(140px, .5fr) minmax(360px, 1.4fr) minmax(180px, .5fr);
+  gap: 22px;
+}
+.login-hero h1 { font-size: clamp(28px, 3vw, 40px); margin: 5px 0; }
+.login-hero p { font-size: 13px; line-height: 1.35; }
+.role-gate-head { max-width: 860px; margin-bottom: 18px; }
+.role-gate-head h2 { font-size: clamp(27px, 3vw, 38px); margin-bottom: 8px; }
+.role-gate-head p { font-size: 14px; line-height: 1.4; }
+.role-gate-layout { gap: 20px; }
+.role-card { min-height: 230px; padding: 18px; }
+.role-card-label { font-size: 18px; }
+.gate-confirm { padding: 20px; }
+.gate-confirm h2 { font-size: 20px; }
+.gate-confirm p { margin-bottom: 12px; font-size: 13px; line-height: 1.4; }
+.gate-section-title { margin-bottom: 10px; }
+.role-card {
+  background: linear-gradient(145deg, var(--surface), color-mix(in srgb, var(--surface) 90%, var(--accent)));
+  box-shadow: 0 12px 35px -29px rgba(0, 0, 0, .62);
+}
+.role-card[aria-checked="true"] { box-shadow: 0 0 0 2px var(--accent), 0 22px 50px -25px rgba(95, 227, 216, .3); }
+.public-home .role-switch { border-color: rgba(95, 227, 216, .55); background: rgba(95, 227, 216, .13); }
+.public-home .role-switch-label { color: var(--fx-aqua); }
+.public-home .chat-toggle, .chat-toggle[hidden] { display: none; }
+@media (max-width: 700px) {
+  .role-gate { padding: 6px; }
+  .role-gate-inner { padding: 12px; border-radius: 16px; }
+  .login-hero-content { min-height: 0; padding: 18px; grid-template-columns: 1fr; }
+  .login-trust-row { display: none; }
+}
 .role-card {
   border-radius: 18px;
   border: 1px solid var(--line);
@@ -275,3 +340,4 @@ input, select, textarea { border-radius: var(--r-sm) !important; }
 .login-hero { isolation: isolate; }
 .login-hero .fx-field-host { opacity: .8; }
 .nurse-path, .records-toolbar input, .patient-list-filters, .empty-teach { border-radius: var(--r-md); }
+:root[data-contrast="high"] :focus-visible { outline: 3px solid var(--focus-ring) !important; }

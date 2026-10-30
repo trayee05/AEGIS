@@ -413,6 +413,42 @@ class ClinicalRegistry:
                   "created_at": None}
                  for row in mismatches])
 
+    def sentinel_scan(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Everything the Sentinel needs from the source registry in one read.
+
+        Returns metadata only (keys, patient ids, statuses, labels); the FHIR
+        resource body is inspected here and never returned.
+        """
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT record_key, chart_patient_id, source_patient_id, label, "
+                "resource_type, resource_json FROM source_records").fetchall()
+            held_transfers = [dict(r) for r in db.execute(
+                "SELECT id, record_key, source_patient_id, target_patient_id, destination, "
+                "explanation, created_at FROM transfers WHERE status = 'held' "
+                "ORDER BY id DESC LIMIT 50")]
+            open_reports = [dict(r) for r in db.execute(
+                "SELECT id, patient_id, record_key, description, created_at, concern_type, "
+                "safety_status FROM manual_reports WHERE status = 'open' "
+                "AND (concern_type = 'source_record' OR safety_status IN ('pending', 'investigating')) "
+                "ORDER BY id DESC LIMIT 50")]
+        mismatches, invalid = [], []
+        for row in rows:
+            resource = json.loads(row["resource_json"])
+            subject = resource.get("subject", {}).get("reference", "")
+            base = {"record_key": row["record_key"], "chart_patient_id": row["chart_patient_id"],
+                    "source_patient_id": row["source_patient_id"], "label": row["label"],
+                    "resource_type": row["resource_type"],
+                    "restricted": bool(resource.get("_aegisRestricted"))}
+            if (row["chart_patient_id"] != row["source_patient_id"]
+                    or subject != f"Patient/{row['chart_patient_id']}"):
+                mismatches.append({**base, "fhir_subject": subject})
+            if resource.get("status") in ("entered-in-error", "cancelled"):
+                invalid.append({**base, "status": resource.get("status")})
+        return {"mismatches": mismatches, "invalid": invalid,
+                "held_transfers": held_transfers, "open_reports": open_reports,
+                "total_records": [{"count": len(rows)}]}
+
     def dismiss_report(self, report_id: int, note: str) -> Dict[str, Any]:
         note = note.strip()
         if len(note) < 10:
