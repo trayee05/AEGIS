@@ -65,7 +65,7 @@ python -m aegis_care.cli privacy       # empirical leakage attacks on our own in
 python -m aegis_care.cli experiment    # the full paired matrix -> results/
 python -m aegis_care.cli external-validate --fhir synthea_fhir.zip  # external-format proof
 python -m aegis_care.cli serve         # dashboard at http://127.0.0.1:8000
-pytest -q                              # 239 passed, 1 skipped on Python 3.12
+pytest -q                              # 261 passed, 1 skipped on Python 3.12
 
 python scripts/check_reproducible.py               # committed results must re-run identically
 python scripts/reseal_evidence.py results/external_validation --dry-run
@@ -354,6 +354,46 @@ and available in a light or dark theme that follows the operating system until y
 one explicitly. The memory graph pans and zooms; the experiment runner reports determinate
 `completed/total` progress from `GET /api/experiment/status` rather than an unbounded
 spinner.
+
+---
+
+## The Sentinel: finding errors nobody reported
+
+CARE starts from a known-bad memory. The **Sentinel** (dashboard tab, for the safety,
+compliance and research workspaces) answers the question that comes first: *is
+anything wrong right now?* It patrols every runtime and the source registry every few
+seconds and runs one agent loop: **observe → detect → correlate → decide → act → verify**.
+
+| Detector | Compares each memory against | Catches |
+| --- | --- | --- |
+| Identity re-resolution | FHIR Patient search for the stored alias | F1 |
+| Work-order cross-check | the task named in its signed replay recipe | F1, F2 |
+| Lineage patient drift / cited-evidence ownership | its parent / the FHIR subject of what it cites | F2 |
+| Stale value | the current FHIR Observation | F4 |
+| Restricted-field exposure | the role field matrix | F3 |
+| Inherits a withdrawn record, content integrity, lineage coverage | lifecycle state, write-time commitment, lineage | spread, tamper, masking |
+| Chart mismatch, invalidated source, blocked handover, open report | the source registry | source errors |
+
+No detector reads benchmark instrumentation (`_true_parents`, `env.truth`,
+`true_contaminated`); a test enforces this, which is what makes the **blind drill**
+honest: plant a fault of a hidden family, and the Sentinel is scored against labels it
+cannot see. Across all four families and complete / 40%-lost / targeted lineage it finds
+every wrong memory with zero clean records flagged (`tests/test_sentinel.py`).
+
+Findings are traced to a root cause and grouped per trajectory. Containment seeds CARE at
+the **earliest** root only, lets lineage and latent search find the rest, re-scans, and
+runs a follow-up wave only for anything CARE did not reach — so even with lineage lost,
+only the true seed is withdrawn and every descendant is rebuilt from FHIR. With
+**autopilot** on this happens on detection; otherwise a person approves each plan. The
+agent never refiles a source chart itself: it shows the FHIR evidence and a reviewer
+approves.
+
+**Manual entry.** "Tell the Sentinel" takes a free-text report, identifies the patient and
+the kind of error, cross-checks the live detectors for corroborating evidence, and files it
+with safety (assistant memory) or compliance (source record). With `GEMINI_API_KEY` set,
+Gemini classifies the text and writes the situation brief from finding metadata only;
+without a key both run locally. Sentinel model calls are capped by
+`AEGIS_SENTINEL_MAX_CALLS` (default 80) and the brief is cached until the findings change.
 
 ---
 

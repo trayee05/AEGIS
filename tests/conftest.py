@@ -29,6 +29,7 @@ atexit.register(shutil.rmtree, _CLINICAL_TMP, True)
 # the model budget to zero before aegis_care is imported, so routing degrades to
 # "ask me to rephrase" instead of calling out.
 os.environ["AEGIS_ASSISTANT_MAX_CALLS"] = "0"
+os.environ["AEGIS_SENTINEL_MAX_CALLS"] = "0"
 
 import pytest
 

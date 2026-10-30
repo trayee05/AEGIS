@@ -137,7 +137,7 @@ const ROLES = {
     question: "What is the blast radius, and is it contained?",
     blurb: "Run the containment loop end to end: find affected records, prove which were really affected, rebuild them, and keep the bad version out.",
     duties: ["Contain a reported error", "Track the blast radius", "Sign off safe resume"],
-    views: ["command", "graph"],
+    views: ["command", "sentinel", "graph"],
     home: "command",
     context: "Incident containment",
     note: "You coordinate recovery and never receive clinical content.",
@@ -150,7 +150,7 @@ const ROLES = {
     question: "Did anything leave a runtime that shouldn't have, and what needs a human?",
     blurb: "Audit every field that crossed a boundary, run the leakage tests, and clear the queue of records the system refused to guess at.",
     duties: ["Audit the data boundary", "Decide quarantined records", "Review the audit trail"],
-    views: ["assurance"],
+    views: ["assurance", "sentinel"],
     home: "assurance",
     context: "Assurance & review",
     note: "You see metadata and audit evidence, plus records escalated for review.",
@@ -163,7 +163,7 @@ const ROLES = {
     question: "Does the mechanism hold across conditions?",
     blurb: "The full experimental console: paired baselines, the provenance matrix, privacy attacks, and the hash-bound evidence package.",
     duties: ["Run the paired matrix", "Compare all nine conditions", "Verify the evidence package"],
-    views: ["overview", "incident", "care", "graph", "baselines", "privacy",
+    views: ["overview", "sentinel", "incident", "care", "graph", "baselines", "privacy",
             "evidence", "review", "experiment", "audit"],
     home: "overview",
     context: "Clinical memory incident recovery",
@@ -174,6 +174,7 @@ const ROLES = {
 
 const VIEW_LABELS = {
   records: "My Patients", command: "Incident Command", assurance: "Assurance",
+  sentinel: "Sentinel",
   overview: "Mission", incident: "Incident Lab", care: "CARE Recovery",
   graph: "Memory Graph", baselines: "Baselines", privacy: "Privacy Audit",
   evidence: "Evidence Center", review: "Review Queue",
@@ -253,6 +254,8 @@ function activateView(name, { scroll = true, focusTab = false } = {}) {
   if (name === "records") loadPatients();
   if (name === "command") initCommandView();
   if (name === "assurance") initAssuranceView();
+  // The Sentinel lives in sentinel.js; it starts and stops its own patrol loop.
+  window.sentinelViewChanged?.(name);
   if (scroll) window.scrollTo({ top: 0, behavior: "auto" });
 }
 

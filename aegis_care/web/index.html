@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/static/styles.css?v=20261031-audit1">
   <link rel="preload" as="font" type="font/woff2" href="/static/assets/fonts/Geist-Variable.woff2" crossorigin>
   <link rel="stylesheet" href="/static/fx.css?v=20261031-audit1">
+  <link rel="stylesheet" href="/static/sentinel.css?v=20261031-sentinel1">
 </head>
 <body>
 <script>
@@ -207,6 +208,135 @@
     </div>
     <div class="spacer"></div>
     <div id="command-outcome"></div>
+  </section>
+
+  <!-- ============ SENTINEL · PROACTIVE ERROR DETECTION ============ -->
+  <section class="view" id="view-sentinel">
+    <div class="sn-band">
+      <div class="sn-band-grid">
+        <div class="sn-band-copy">
+          <div class="sn-eyebrow"><span class="sn-live-dot" id="sn-live-dot"></span> Autonomous error sentinel</div>
+          <h2>Finds what is wrong <em>before anyone reports it.</em></h2>
+          <p>Every few seconds the Sentinel re-checks each memory against trusted FHIR,
+            its own work order, its lineage and the access policy, traces what it finds
+            to a root cause, and hands that root to CARE. People can still report
+            anything it cannot see.</p>
+          <div class="sn-controls" role="group" aria-label="Sentinel controls">
+            <button class="sn-btn sn-btn-primary" id="sn-patrol" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+              Patrol now</button>
+            <label class="sn-switch"><input type="checkbox" id="sn-live" checked>
+              <span class="sn-switch-track" aria-hidden="true"><i></i></span>
+              <span>Live patrol <small id="sn-live-every">every 8s</small></span></label>
+            <label class="sn-switch"><input type="checkbox" id="sn-autopilot">
+              <span class="sn-switch-track" aria-hidden="true"><i></i></span>
+              <span>Autopilot <small>contain on detection</small></span></label>
+            <button class="sn-btn sn-btn-ghost" id="sn-jump-report" type="button">Report something</button>
+          </div>
+        </div>
+        <div class="sn-posture" id="sn-posture" aria-live="polite">
+          <div class="sn-radar" aria-hidden="true">
+            <svg viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r="56" class="sn-ring"/>
+              <circle cx="60" cy="60" r="38" class="sn-ring"/>
+              <circle cx="60" cy="60" r="20" class="sn-ring"/>
+              <path d="M60 60 L60 4 A56 56 0 0 1 108.5 32 Z" class="sn-sweep"/>
+              <g id="sn-blips"></g>
+            </svg>
+          </div>
+          <div class="sn-posture-copy">
+            <span class="sn-posture-kicker">Posture</span>
+            <strong id="sn-posture-label">Starting…</strong>
+            <span id="sn-posture-meta">First sweep pending</span>
+          </div>
+        </div>
+      </div>
+      <div class="sn-stats" id="sn-stats"></div>
+    </div>
+
+    <div class="sn-brief" id="sn-brief" aria-live="polite"></div>
+
+    <div class="sn-grid">
+      <div class="sn-main">
+        <div class="panel sn-panel">
+          <div class="sn-panel-head">
+            <div><h3>Open cases</h3>
+              <p class="hint">Findings grouped by the trajectory they came from and traced to a root cause.</p></div>
+            <span class="sn-count" id="sn-case-count">0</span>
+          </div>
+          <div id="sn-cases"></div>
+        </div>
+
+        <div class="panel sn-panel">
+          <div class="sn-panel-head">
+            <div><h3>Source-record queue</h3>
+              <p class="hint">Chart and handover problems. The agent proposes fixes it can verify against FHIR; a person approves them.</p></div>
+            <span class="sn-count" id="sn-source-count">0</span>
+          </div>
+          <div id="sn-source"></div>
+        </div>
+
+        <div class="panel sn-panel" id="sn-report-panel">
+          <div class="sn-panel-head">
+            <div><h3>Tell the Sentinel</h3>
+              <p class="hint">Describe what looks wrong in your own words. It works out the patient and the kind of error,
+                checks the live detectors for evidence, and files it with the right team.</p></div>
+            <span class="sn-model" id="sn-model-chip"></span>
+          </div>
+          <form class="sn-report" id="sn-report-form">
+            <label for="sn-report-text">What looks wrong?</label>
+            <textarea id="sn-report-text" rows="3" maxlength="1200" required
+              placeholder="e.g. The handover the assistant gave me for Rania Chowdhury lists a potassium result that I think belongs to someone else."></textarea>
+            <div class="sn-report-row">
+              <div class="field"><label for="sn-report-patient">Patient (optional)</label>
+                <input id="sn-report-patient" list="sn-patient-list" autocomplete="off" placeholder="Name or S-number"></div>
+              <datalist id="sn-patient-list"></datalist>
+              <div class="sn-examples" id="sn-examples" aria-label="Example reports"></div>
+              <button class="btn" type="submit" id="sn-report-submit">Triage &amp; file <span>→</span></button>
+            </div>
+          </form>
+          <div id="sn-report-result" aria-live="polite"></div>
+        </div>
+
+        <div class="panel sn-panel">
+          <div class="sn-panel-head">
+            <div><h3>Contained by the Sentinel</h3>
+              <p class="hint">Each containment is a CARE run with its own signed recovery certificate.</p></div>
+          </div>
+          <div id="sn-contained"></div>
+        </div>
+      </div>
+
+      <aside class="sn-side">
+        <div class="sn-trace" aria-label="Agent trace">
+          <div class="sn-trace-head"><span>Agent trace</span><b id="sn-trace-meta">idle</b></div>
+          <ol id="sn-trace" aria-live="polite"></ol>
+        </div>
+
+        <div class="panel sn-panel sn-drill">
+          <h3>Blind drill</h3>
+          <p class="hint">Plant a fault without telling the Sentinel where or what kind, then watch it hunt.
+            Scored against ground truth the Sentinel never reads.</p>
+          <div class="sn-drill-row">
+            <div class="field"><label for="sn-drill-prov">Lineage that survives</label>
+              <select id="sn-drill-prov">
+                <option value="complete">All lineage</option>
+                <option value="random40" selected>40% lost</option>
+                <option value="random60">60% lost</option>
+                <option value="targeted">Targeted removal</option>
+              </select></div>
+            <button class="btn ink" id="sn-drill" type="button">Plant hidden fault</button>
+          </div>
+          <div id="sn-drills"></div>
+        </div>
+
+        <div class="panel sn-panel">
+          <h3>Detectors</h3>
+          <p class="hint">What each check compares against. Lit tiles fired on the last sweep.</p>
+          <div class="sn-detectors" id="sn-detectors"></div>
+        </div>
+      </aside>
+    </div>
   </section>
 
   <!-- ============ COMPLIANCE & REVIEW ============ -->
@@ -666,5 +796,6 @@
 
 <script src="/static/app.js?v=20261031-audit1"></script>
 <script src="/static/fx.js?v=20261031-audit1" defer></script>
+<script src="/static/sentinel.js?v=20261031-sentinel1"></script>
 </body>
 </html>

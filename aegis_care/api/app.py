@@ -39,6 +39,8 @@ from ..incident.masks import ProvenanceMask
 from ..incident.scenarios import FAMILIES, FAMILY_INFO, Incident, ScenarioBuilder
 from ..memory.models import MemoryState
 from ..policy.rbac import ROLE_FIELD_MATRIX, Role
+from ..sentinel import DETECTORS, Sentinel
+from ..sentinel import triage as sentinel_triage
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
@@ -66,6 +68,8 @@ class AppState:
         self.experiment_runner: Optional[ExperimentRunner] = None
         self.experiment_error: Optional[str] = None
         self.experiment_started_at: Optional[float] = None
+        self.sentinel = Sentinel(lambda: self.env, self.registry, self.lock,
+                                 lambda: self.builder)
 
     def reset(self) -> None:
         self.registry.reset_activity()
@@ -77,6 +81,7 @@ class AppState:
         self.masks.clear()
         self.assistant = Router()
         self.assistant_sessions = {"default": self.assistant}
+        self.sentinel.reset()
 
     def assistant_for(self, session_id: str) -> Router:
         """Return isolated assistant context for one browser session."""
@@ -641,6 +646,112 @@ def correct_source_record(req: SourceCorrectionRequest) -> Dict[str, Any]:
         raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+# ======================================================================
+# Sentinel: proactive error detection
+#
+# The rest of the console starts from a reported incident. The Sentinel does
+# not wait for one: it patrols every runtime and the source registry, traces
+# findings to root causes, and (with autopilot, or a person's approval) hands
+# those roots to CARE. Manual reports enter here too, and are cross-checked
+# against the detectors before they are filed.
+# ======================================================================
+class SentinelPatrolRequest(BaseModel):
+    autopilot: bool = False
+    patient_id: Optional[str] = Field(None, max_length=32)
+    brief: bool = True
+
+
+class SentinelDrillRequest(BaseModel):
+    family: Optional[str] = Field(None, description="F1-F4, or omit for a random hidden family")
+    provenance: str = Field("random40", description="complete | random20 | random40 | random60 | targeted")
+
+
+class SentinelReportRequest(BaseModel):
+    text: str = Field(..., min_length=10, max_length=1200)
+    patient_id: Optional[str] = Field(None, max_length=32)
+    record_key: Optional[str] = Field(None, max_length=160)
+
+
+def _sentinel_patient_names(ids: List[str]) -> Dict[str, str]:
+    out = {}
+    for pid in ids:
+        fixed = state.registry.patient(pid)
+        out[pid] = fixed["name"] if fixed else state.env.fhir.patient_display(pid)
+    return out
+
+
+@app.get("/api/sentinel/status")
+def sentinel_status() -> Dict[str, Any]:
+    s = state.sentinel
+    return {"detectors": DETECTORS, "model": sentinel_triage.status(),
+            "patrols": s.patrols, "last": s.last["at"] if s.last else None,
+            "contained": len(s.contained), "drills": len(s.drills),
+            "families": {k: v["name"] for k, v in FAMILY_INFO.items()},
+            "provenance_conditions": list(ProvenanceMask.CONDITIONS)}
+
+
+@app.post("/api/sentinel/patrol")
+def sentinel_patrol(req: SentinelPatrolRequest) -> Dict[str, Any]:
+    with state.lock:
+        result = state.sentinel.patrol(autopilot=req.autopilot, patient=req.patient_id)
+    ids = sorted({p for c in result["cases"] for p in c["patients"]} |
+                 {f["patient_id"] for f in result["findings"] if f.get("patient_id")} |
+                 {p for a in result["contained"] for p in a.get("patients", [])})
+    result["patient_names"] = _sentinel_patient_names(ids)
+    result["brief"] = sentinel_triage.brief(result, use_model=req.brief)
+    result["model"] = sentinel_triage.status()
+    return result
+
+
+@app.post("/api/sentinel/cases/{case_id}/contain")
+def sentinel_contain(case_id: str) -> Dict[str, Any]:
+    try:
+        with state.lock:
+            return state.sentinel.contain(case_id, actor="reviewer")
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.get("/api/sentinel/certificates/{incident_id}", response_class=PlainTextResponse)
+def sentinel_certificate(incident_id: str) -> str:
+    for outcome in state.sentinel.contained.values():
+        if outcome["incident_id"] == incident_id:
+            return outcome["certificate_text"]
+    raise HTTPException(404, f"no sentinel certificate for {incident_id}")
+
+
+@app.post("/api/sentinel/drill")
+def sentinel_drill(req: SentinelDrillRequest) -> Dict[str, Any]:
+    if req.family and req.family not in FAMILIES:
+        raise HTTPException(400, f"unknown family {req.family}")
+    if req.provenance not in ProvenanceMask.CONDITIONS:
+        raise HTTPException(400, f"unknown provenance condition {req.provenance}")
+    with state.lock:
+        drill = state.sentinel.drill(req.family, req.provenance, register=lambda *_: None)
+        state.env.ledger.log_event(None, "sentinel", "drill_planted", None,
+                                   {"drill": drill["drill_id"], "provenance": req.provenance})
+    return drill
+
+
+@app.post("/api/sentinel/report")
+def sentinel_report(req: SentinelReportRequest) -> Dict[str, Any]:
+    def run_detectors(patient_id: str) -> List[Dict[str, Any]]:
+        from ..sentinel.detectors import DetectorSuite
+        scan = DetectorSuite(state.env, state.registry).run(patient_filter=patient_id)
+        return [f.to_dict() for f in scan["findings"]]
+
+    try:
+        with state.lock:
+            result = sentinel_triage.triage(
+                req.text, registry=state.registry, run_detectors=run_detectors,
+                patient_id=req.patient_id or None, record_key=req.record_key or None)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if result["patient_id"]:
+        result["patient_name"] = _sentinel_patient_names([result["patient_id"]])[result["patient_id"]]
+    return result
 
 
 # ======================================================================
