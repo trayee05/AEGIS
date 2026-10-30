@@ -168,7 +168,7 @@ body { font-feature-settings: "ss01", "cv11"; letter-spacing: -.005em; }
   box-shadow: var(--panel-shadow);
 }
 .stat, .notice, .cert, .held-card, .queue-card, .change-card, .outcome-card,
-.patient-row, .record-stat, .rollup, .cmd-step, .operator-case, .accessibility-card,
+.patient-row, .record-stat, .rollup, .cmd-step, .operator-case,
 .quick-summary, .stage { border-radius: var(--r-md); }
 .record-stats, .outcome-cards { gap: 10px; }
 input, select, textarea { border-radius: var(--r-sm) !important; }
@@ -183,13 +183,12 @@ input, select, textarea { border-radius: var(--r-sm) !important; }
 
 /* ---------------- spotlight cards ---------------- */
 .role-card, .stage, .proof-ribbon .metric, .patient-row, .outcome-card, .queue-card,
-.operator-case, .change-card, .accessibility-card {
+.operator-case, .change-card {
   position: relative;
   isolation: isolate;
 }
 .role-card::before, .stage::before, .proof-ribbon .metric::before, .patient-row::before,
-.outcome-card::before, .queue-card::before, .operator-case::before, .change-card::before,
-.accessibility-card::before {
+.outcome-card::before, .queue-card::before, .operator-case::before, .change-card::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -203,7 +202,7 @@ input, select, textarea { border-radius: var(--r-sm) !important; }
 }
 .role-card:hover::before, .stage:hover::before, .proof-ribbon .metric:hover::before,
 .patient-row:hover::before, .outcome-card:hover::before, .queue-card:hover::before,
-.operator-case:hover::before, .change-card:hover::before, .accessibility-card:hover::before { opacity: 1; }
+.operator-case:hover::before, .change-card:hover::before { opacity: 1; }
 
 /* ---------------- role gate ---------------- */
 .login-hero {
@@ -341,3 +340,4 @@ body.workspace-gate-open { overflow: hidden; }
 .login-hero { isolation: isolate; }
 .login-hero .fx-field-host { opacity: .8; }
 .nurse-path, .records-toolbar input, .patient-list-filters, .empty-teach { border-radius: var(--r-md); }
+:root[data-contrast="high"] :focus-visible { outline: 3px solid var(--focus-ring) !important; }

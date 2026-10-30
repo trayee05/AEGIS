@@ -12,8 +12,7 @@
  *   SplitReveal       hero headlines settle in word by word on first paint.
  *   TabIndicator      a sliding underline for the console tabs.
  *
- * Every effect checks reduced motion (system setting or the app's own display
- * preference) and degrades to a static frame.
+ * Every effect checks reduced motion and degrades to a static frame.
  */
 (() => {
   "use strict";
@@ -251,7 +250,7 @@
   /* ================================================================
    * Spotlight: pointer-follow glow, driven purely by CSS variables.
    * ================================================================ */
-  const SPOT = ".role-card, .stage, .proof-ribbon .metric, .patient-row, .outcome-card, .queue-card, .operator-case, .change-card, .accessibility-card";
+  const SPOT = ".role-card, .stage, .proof-ribbon .metric, .patient-row, .outcome-card, .queue-card, .operator-case, .change-card";
   function initSpotlight() {
     document.addEventListener("pointermove", (e) => {
       const card = e.target.closest && e.target.closest(SPOT);

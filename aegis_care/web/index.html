@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-text-size="large" data-contrast="high" data-motion="reduce">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,9 +7,9 @@
   <meta name="description" content="AEGIS-Care maps, repairs, and verifies the blast radius of compromised clinical AI memory.">
   <title>AEGIS-Care · Clinical AI Memory Recovery</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2307151b'/%3E%3Crect x='7' y='17' width='4' height='8' fill='%2372e4df'/%3E%3Crect x='14' y='8' width='4' height='17' fill='%2372e4df'/%3E%3Crect x='21' y='13' width='4' height='12' fill='%2372e4df'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="/static/styles.css?v=20261030-review2">
+  <link rel="stylesheet" href="/static/styles.css?v=20261031-audit1">
   <link rel="preload" as="font" type="font/woff2" href="/static/assets/fonts/Geist-Variable.woff2" crossorigin>
-  <link rel="stylesheet" href="/static/fx.css?v=20261030-demo-entry3">
+  <link rel="stylesheet" href="/static/fx.css?v=20261031-audit1">
 </head>
 <body>
 <script>
@@ -17,10 +17,6 @@
   try {
     var t = localStorage.getItem("aegis-theme");
     if (t === "dark" || t === "light") document.documentElement.dataset.theme = t;
-    var display = JSON.parse(localStorage.getItem("aegis-display") || "{}");
-    if (display.textSize === "large") document.documentElement.dataset.textSize = "large";
-    if (display.contrast === "high") document.documentElement.dataset.contrast = "high";
-    if (display.motion === "reduce") document.documentElement.dataset.motion = "reduce";
   } catch (e) { /* storage blocked: fall through to the system preference */ }
 </script>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -33,8 +29,6 @@
     <div class="header-context" id="header-context">Clinical memory incident recovery</div>
     <div class="header-status">
       <button class="header-utility" id="help-button" type="button">Help</button>
-      <button class="header-utility" id="accessibility-button" type="button"
-              aria-haspopup="dialog">Accessibility</button>
       <button class="role-switch" id="role-switch" type="button" aria-haspopup="menu"
               aria-expanded="false" title="Current workspace and session options">
         <span class="role-switch-avatar" id="role-switch-avatar" aria-hidden="true"></span>
@@ -68,7 +62,7 @@
      aria-label="Choose a workspace" hidden>
   <div class="role-gate-inner">
     <button class="gate-back" id="gate-back" type="button">← Back to overview</button>
-    <section class="login-hero" aria-label="AEGIS-Care secure workspace access">
+    <section class="login-hero" aria-label="AEGIS-Care role selection">
       <div class="login-hero-image" aria-hidden="true"></div>
       <div class="login-hero-scrim" aria-hidden="true"></div>
       <div class="login-hero-grid" aria-hidden="true"></div>
@@ -78,10 +72,9 @@
           <span class="brand-word">AEGIS<span>·CARE</span></span>
         </div>
         <div>
-          <span class="login-overline">Clinical AI memory assurance</span>
-          <h1>One system.<br><em>Four protected workspaces.</em></h1>
-          <p>Your workspace stays locked to the role you choose. AEGIS can guide work
-            inside it, but cannot move you into another role.</p>
+          <span class="login-overline">Synthetic incident workspace</span>
+          <h1>One incident.<br><em>Four responsibilities.</em></h1>
+          <p>Each role sees the records and actions relevant to its job. Choose one to explore the same incident from that view.</p>
         </div>
         <div class="login-trust-row" aria-label="Workspace safeguards">
           <span><b>01</b> Synthetic records</span>
@@ -92,14 +85,14 @@
     </section>
     <div class="role-gate-head">
       <div class="gate-kicker">Explore the synthetic demo</div>
-      <h2>Choose a view of the same incident</h2>
+      <h2>Pick a role for this incident</h2>
       <p>The safety officer contains it, the care team checks patient records, compliance
         audits the boundary, and the researcher inspects the evidence. Choose a role to
         run the live workflow.</p>
     </div>
     <div class="role-gate-layout">
       <div>
-        <h2 class="gate-section-title">1. Which workspace do you want to open?</h2>
+        <h2 class="gate-section-title">1. Choose a workspace</h2>
         <div class="role-gate-grid" id="role-gate-grid" role="radiogroup"
              aria-label="Choose your workspace role"></div>
       </div>
@@ -112,20 +105,7 @@
         <button class="btn gate-continue" id="gate-continue" type="button" disabled>
           Continue to workspace
         </button>
-        <button class="gate-accessibility" id="gate-accessibility" type="button">
-          Adjust text, contrast or motion
-        </button>
       </aside>
-    </div>
-    <div class="role-gate-foot">
-      <span class="gate-note-mark" aria-hidden="true">!</span>
-      <div>
-        <strong>Demo access — not production authentication.</strong>
-        This research prototype uses synthetic records. Choosing a role changes the
-        interface and service permissions, but it does not verify a real staff identity.
-        Production deployment requires identity-provider integration. Never enter real
-        patient information here.
-      </div>
     </div>
   </div>
 </div>
@@ -285,12 +265,14 @@
     </div>
 
     <div class="assurance-panel" id="assurance-trail">
-      <div class="panel">
-        <h3>Append-only audit trail</h3>
-        <p class="hint">Nothing is destructively deleted. Withdrawn content becomes
-          non-servable and leaves a policy-controlled tombstone.</p>
-        <button class="btn ghost small" id="btn-assurance-trail-refresh">Refresh</button>
-        <div class="spacer"></div>
+      <div class="panel audit-panel">
+        <div class="audit-header">
+          <div>
+            <h3>Event history</h3>
+            <p class="hint">Recovery and access events, newest first. Withdrawn versions remain blocked.</p>
+          </div>
+          <button class="btn ghost small" id="btn-assurance-trail-refresh">Refresh</button>
+        </div>
         <div class="log" id="assurance-log"></div>
       </div>
     </div>
@@ -603,47 +585,18 @@
 
   <!-- ============ AUDIT ============ -->
   <section class="view" id="view-audit">
-    <div class="panel">
-      <h2>Append-only audit log</h2>
-      <p class="hint">Superseded content is never destructively deleted; it becomes
-        non-servable and is represented by a policy-controlled tombstone.</p>
-      <button class="btn ghost small" id="btn-audit-refresh">Refresh</button>
-      <div class="spacer"></div>
+    <div class="panel audit-panel">
+      <div class="audit-header">
+        <div>
+          <h2>Event history</h2>
+          <p class="hint">Recovery and access events, newest first. Withdrawn versions remain blocked.</p>
+        </div>
+        <button class="btn ghost small" id="btn-audit-refresh">Refresh</button>
+      </div>
       <div class="log" id="audit-log"></div>
     </div>
   </section>
 </main>
-
-<dialog class="accessibility-dialog" id="accessibility-dialog" aria-labelledby="accessibility-title">
-  <form method="dialog" class="accessibility-card">
-    <div class="accessibility-head">
-      <div>
-        <span class="section-kicker">Display settings</span>
-        <h2 id="accessibility-title">Make AEGIS easier to use</h2>
-      </div>
-      <button class="dialog-close" value="close" aria-label="Close accessibility settings">&times;</button>
-    </div>
-    <p>These settings are saved on this device. They do not change patient or incident data.</p>
-    <div class="preference-list">
-      <label class="preference-row">
-        <span><strong>Larger text</strong><small>Increase labels, instructions and patient details.</small></span>
-        <input id="pref-large-text" type="checkbox" role="switch">
-      </label>
-      <label class="preference-row">
-        <span><strong>High contrast</strong><small>Strengthen borders, text and focus indicators.</small></span>
-        <input id="pref-high-contrast" type="checkbox" role="switch">
-      </label>
-      <label class="preference-row">
-        <span><strong>Reduce motion</strong><small>Stop non-essential animation and smooth scrolling.</small></span>
-        <input id="pref-reduce-motion" type="checkbox" role="switch">
-      </label>
-    </div>
-    <div class="accessibility-actions">
-      <button class="btn ghost" id="preferences-reset" type="button">Reset display settings</button>
-      <button class="btn" value="close">Done</button>
-    </div>
-  </form>
-</dialog>
 
 <div class="coach" id="coach" hidden>
   <div class="coach-card" id="coach-card">
@@ -711,7 +664,7 @@
 <div class="toast-stack" id="toast-stack" role="status" aria-live="polite" aria-atomic="false"></div>
 <div class="sr-only" id="urgent-announcer" role="status" aria-live="assertive" aria-atomic="true"></div>
 
-<script src="/static/app.js?v=20261030-demo-entry3"></script>
-<script src="/static/fx.js?v=20261030-fx1" defer></script>
+<script src="/static/app.js?v=20261031-audit1"></script>
+<script src="/static/fx.js?v=20261031-audit1" defer></script>
 </body>
 </html>

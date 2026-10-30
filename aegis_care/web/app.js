@@ -253,7 +253,7 @@ function activateView(name, { scroll = true, focusTab = false } = {}) {
   if (name === "records") loadPatients();
   if (name === "command") initCommandView();
   if (name === "assurance") initAssuranceView();
-  if (scroll) window.scrollTo({ top: 0, behavior: "smooth" });
+  if (scroll) window.scrollTo({ top: 0, behavior: "auto" });
 }
 
 function buildTabs() {
@@ -494,7 +494,7 @@ function selectRole(id, { firstRun = false } = {}) {
     $("chat-input").value = "Demo an end-to-end recovery";
     $("chat-input").focus();
   } else if (pendingWorkspaceIntent === "manual" && id === "researcher") {
-    $("trajectory-theater").scrollIntoView({ behavior: "smooth", block: "start" });
+    $("trajectory-theater").scrollIntoView({ behavior: "auto", block: "start" });
   }
   pendingWorkspaceIntent = null;
 }
@@ -569,50 +569,7 @@ function renderRoleSurface() {
   if (id === "compliance") initAssuranceView();
 }
 
-/* ---------------- accessible display preferences & persistent help ---------------- */
-const DISPLAY_KEY = "aegis-display";
-
-function readDisplayPreferences() {
-  try { return JSON.parse(localStorage.getItem(DISPLAY_KEY) || "{}"); }
-  catch (e) { return {}; }
-}
-
-function applyDisplayPreferences(next) {
-  document.documentElement.dataset.textSize = next.textSize === "large" ? "large" : "normal";
-  document.documentElement.dataset.contrast = next.contrast === "high" ? "high" : "normal";
-  document.documentElement.dataset.motion = next.motion === "reduce" ? "reduce" : "normal";
-  try { localStorage.setItem(DISPLAY_KEY, JSON.stringify(next)); } catch (e) { /* storage blocked */ }
-  $("pref-large-text").checked = next.textSize === "large";
-  $("pref-high-contrast").checked = next.contrast === "high";
-  $("pref-reduce-motion").checked = next.motion === "reduce";
-}
-
-function openAccessibility() {
-  const dialog = $("accessibility-dialog");
-  applyDisplayPreferences(readDisplayPreferences());
-  if (!dialog.open) dialog.showModal();
-}
-
-function initAccessibility() {
-  applyDisplayPreferences(readDisplayPreferences());
-  $("accessibility-button").addEventListener("click", openAccessibility);
-  $("gate-accessibility").addEventListener("click", openAccessibility);
-  [["pref-large-text", "textSize", "large"],
-   ["pref-high-contrast", "contrast", "high"],
-   ["pref-reduce-motion", "motion", "reduce"]].forEach(([control, key, enabled]) => {
-    $(control).addEventListener("change", (e) => {
-      const prefs = readDisplayPreferences();
-      prefs[key] = e.target.checked ? enabled : "normal";
-      applyDisplayPreferences(prefs);
-      $("urgent-announcer").textContent = `${e.target.closest("label").querySelector("strong").textContent} ${e.target.checked ? "on" : "off"}`;
-    });
-  });
-  $("preferences-reset").addEventListener("click", () => {
-    applyDisplayPreferences({ textSize: "normal", contrast: "normal", motion: "normal" });
-    $("urgent-announcer").textContent = "Display settings reset";
-  });
-}
-
+/* ---------------- persistent help ---------------- */
 function initPersistentHelp() {
   $("help-button").addEventListener("click", () => {
     if (!STATE.role && $("role-gate").hidden) {
@@ -668,7 +625,6 @@ async function boot() {
   initTheme();
   initTabs();
   initTour();
-  initAccessibility();
   initPersistentHelp();
   const health = await api("/api/health");
   $("version").textContent = `v${health.version} · ${health.model}`;
@@ -1041,7 +997,7 @@ function initQuickLab() {
   });
   $("btn-hero-inject").addEventListener("click", () => {
     if (!STATE.role) { openRoleGate({ preferredRole: "researcher", intent: "manual" }); return; }
-    $("trajectory-theater").scrollIntoView({ behavior: "smooth", block: "center" });
+    $("trajectory-theater").scrollIntoView({ behavior: "auto", block: "center" });
     window.setTimeout(() => $("btn-quick-inject").click(), 450);
   });
 
@@ -1867,23 +1823,34 @@ $("btn-experiment").addEventListener("click", async () => {
 });
 
 /* ---------------- audit ---------------- */
+function renderEventLog(log, events) {
+  if (!events.length) {
+    log.innerHTML = '<p class="event-empty">No events recorded yet.</p>';
+    return;
+  }
+  const rows = events.map((event) => {
+    const time = String(event.at ?? "");
+    const kind = String(event.kind ?? "").replace(/_/g, " ");
+    return `<tr>
+      <td data-label="Time"><time datetime="${esc(time)}">${esc(time.slice(11, 23))}</time></td>
+      <td data-label="Actor" class="event-actor">${esc(event.actor)}</td>
+      <td data-label="Event" class="event-kind">${esc(kind)}</td>
+      <td data-label="Record" class="event-subject">${esc(event.subject || "—")}</td>
+    </tr>`;
+  }).join("");
+  log.innerHTML = `<table class="event-table">
+    <thead><tr><th scope="col">Time</th><th scope="col">Actor</th><th scope="col">Event</th><th scope="col">Record</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
 async function loadAudit() {
   const log = $("audit-log");
   try {
     const r = await api("/api/events?limit=300");
-    log.innerHTML = "";
-    r.events.forEach((e) => {
-      const row = el("div", "row");
-      row.innerHTML =
-        `<span class="muted">${esc(String(e.at).slice(11, 23))}</span>
-         <span class="actor">${esc(e.actor)}</span>
-         <span class="kind">${esc(e.kind)}</span>
-         <span class="subject">${esc(e.subject ?? "")}</span>`;
-      log.appendChild(row);
-    });
-    if (!r.events.length) log.innerHTML = '<span class="muted">No events yet.</span>';
+    renderEventLog(log, r.events);
   } catch (e) {
-    log.innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`;
+    log.innerHTML = `<p class="event-error">${esc(e.message)}</p>`;
   }
 }
 $("btn-audit-refresh").addEventListener("click", loadAudit);
@@ -2054,7 +2021,7 @@ async function selectPatient(token, { reveal = false } = {}) {
     renderPatientRecord(data, out);
     if (reveal && window.matchMedia("(max-width: 1050px)").matches) {
       out.scrollIntoView({
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        behavior: "auto",
         block: "start",
       });
     }
@@ -3009,20 +2976,9 @@ async function loadAssuranceTrail() {
   const log = $("assurance-log");
   try {
     const r = await api("/api/events?limit=300");
-    log.innerHTML = "";
-    if (!r.events.length) {
-      log.innerHTML = '<span class="muted">No events recorded yet.</span>';
-      return;
-    }
-    r.events.forEach((e) => {
-      log.appendChild(el("div", "row",
-        `<span class="muted">${esc(String(e.at).slice(11, 23))}</span>
-         <span class="actor">${esc(e.actor)}</span>
-         <span class="kind">${esc(e.kind)}</span>
-         <span class="subject">${esc(e.subject ?? "")}</span>`));
-    });
+    renderEventLog(log, r.events);
   } catch (e) {
-    log.innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`;
+    log.innerHTML = `<p class="event-error">${esc(e.message)}</p>`;
   }
 }
 
@@ -3102,7 +3058,7 @@ function showTourStep() {
   document.querySelectorAll(".coach-target").forEach((n) =>
     n.classList.remove("coach-target"));
   target.classList.add("coach-target");
-  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  target.scrollIntoView({ behavior: "auto", block: "center" });
 
   $("coach-step").textContent = `${TOUR.at + 1} of ${TOUR.steps.length}`;
   $("coach-title").textContent = title;
