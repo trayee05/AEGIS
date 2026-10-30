@@ -1663,6 +1663,7 @@ def assistant(req: AssistantRequest) -> Dict[str, Any]:
             provenance = normalise_param("provenance", params.get("provenance")) or "targeted"
             with state.lock:
                 incident = state.builder.build(family, env.tasks[0], depth=4, n_controls=1)
+                affected_before_recovery = len(incident.true_contaminated)
                 state.incidents[incident.incident_id] = incident
                 state.snapshots[incident.incident_id] = env.snapshot()
                 mask = ProvenanceMask(env, CONFIG.seed).apply(provenance)
@@ -1670,7 +1671,7 @@ def assistant(req: AssistantRequest) -> Dict[str, Any]:
                 env.ledger.log_event(
                     incident.incident_id, "safety", "incident_reported",
                     incident.seed_key, {"family": family,
-                                        "affected": len(incident.true_contaminated),
+                                        "affected": affected_before_recovery,
                                         "provenance": provenance})
             result = recover(RecoveryRequest(incident_id=incident.incident_id))
             metrics = result.get("metrics", {})
@@ -1680,7 +1681,7 @@ def assistant(req: AssistantRequest) -> Dict[str, Any]:
                          "refresh": True, "recovery": result}
             out["steps"] = [
                 f"Logged a {FAMILY_INFO[family]['name'].lower()} incident",
-                f"{len(incident.true_contaminated)} record(s) had inherited the error, "
+                f"{affected_before_recovery} record(s) had inherited the error, "
                 f"with {mask.edges_removed} of {mask.edges_before} provenance links missing",
                 f"Confirmed {len(result['confirmed'])} by replay and cleared "
                 f"{len(result['cleared'])}",

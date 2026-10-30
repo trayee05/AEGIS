@@ -32,7 +32,7 @@ python -m venv .venv
 pip install -r requirements.txt
 
 python -m aegis_care.cli serve    # dashboard at http://127.0.0.1:8000
-pytest -q                         # 225 tests
+pytest -q                         # 239 passed, 1 skipped on Python 3.12
 ```
 
 Python ≥3.10. No GPU, Docker, network, or model download required — the default

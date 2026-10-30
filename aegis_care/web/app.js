@@ -303,9 +303,13 @@ function initTabs() {
 
   document.addEventListener("click", (e) => {
     const target = e.target.closest("[data-view-target]");
-    if (target && role().views.includes(target.dataset.viewTarget)) {
-      activateView(target.dataset.viewTarget);
+    if (!target) return;
+    const view = target.dataset.viewTarget;
+    if (!STATE.role && !["overview", "evidence"].includes(view)) {
+      openRoleGate({ preferredRole: "researcher" });
+      return;
     }
+    if (role().views.includes(view)) activateView(view);
   });
 
   const fromHash = () => {
@@ -320,6 +324,29 @@ function initTabs() {
 
 /* ---------------- role gate & switcher ---------------- */
 let pendingRole = null;
+let pendingWorkspaceIntent = null;
+
+function openRoleGate({ preferredRole = null, intent = null } = {}) {
+  pendingWorkspaceIntent = intent;
+  $("role-gate").hidden = false;
+  document.body.classList.add("workspace-gate-open");
+  if (preferredRole) {
+    $("role-gate-grid").querySelector(`[data-role="${preferredRole}"]`)?.click();
+  }
+  window.requestAnimationFrame(() => {
+    const selected = $("role-gate-grid").querySelector('[aria-checked="true"]');
+    (selected || $("role-gate-grid").querySelector(".role-card"))?.focus({ preventScroll: true });
+    $("role-gate").scrollTop = 0;
+  });
+}
+
+function closeRoleGate() {
+  $("role-gate").hidden = true;
+  document.body.classList.remove("workspace-gate-open");
+  pendingWorkspaceIntent = null;
+  resetRoleGate();
+  $("btn-hero-agent").focus();
+}
 
 function renderRoleGate() {
   const grid = $("role-gate-grid");
@@ -335,8 +362,7 @@ function renderRoleGate() {
     });
     $("gate-confirm-copy").innerHTML =
       `<h2>${esc(selected.label)}</h2>
-       <p>${esc(selected.blurb)}</p>
-       <ul>${selected.duties.map((d) => `<li>${esc(d)}</li>`).join("")}</ul>`;
+       <p>${esc(selected.blurb)}</p>`;
     const go = $("gate-continue");
     go.disabled = false;
     go.textContent = `Continue as ${selected.short}`;
@@ -378,6 +404,7 @@ function renderRoleGate() {
   $("gate-continue").addEventListener("click", () => {
     if (pendingRole) selectRole(pendingRole, { firstRun: true });
   });
+  $("gate-back").addEventListener("click", closeRoleGate);
 }
 
 function resetRoleGate() {
@@ -403,12 +430,12 @@ function renderRoleMenu() {
      </div>
      <button class="role-menu-item role-menu-end" id="end-session-button" type="button" role="menuitem">
        <span class="role-menu-avatar" aria-hidden="true">↩</span>
-       <span><strong>End session</strong><small>Return to login before choosing another role</small></span>
+       <span><strong>End session</strong><small>Return to overview before choosing another role</small></span>
      </button>`;
   $("end-session-button").addEventListener("click", () => {
     closeRoleMenu();
     $("session-dialog-copy").textContent =
-      `You are leaving the ${current.label} workspace. You will return to role login; patient and incident data will not be reset.`;
+      `You are leaving the ${current.label} workspace. You will return to the overview; synthetic patient and incident data will not be reset.`;
     $("session-dialog").showModal();
   });
 }
@@ -441,6 +468,9 @@ function selectRole(id, { firstRun = false } = {}) {
   $("header-context").textContent = r.context;
   $("safety-role-note").textContent = r.note;
   $("role-gate").hidden = true;
+  document.body.classList.remove("workspace-gate-open", "public-home");
+  $("chat-toggle").hidden = false;
+  $("role-switch").querySelector(".role-switch-label").textContent = "Workspace locked";
 
   buildTabs();
   activateView(r.home, { scroll: false });
@@ -456,9 +486,17 @@ function selectRole(id, { firstRun = false } = {}) {
     renderAssistantWelcome();
     primeChat();
   }
-  if (firstRun) {
+  if (firstRun && !pendingWorkspaceIntent) {
     startTour(id);
   }
+  if (pendingWorkspaceIntent === "agent" && ["safety", "researcher"].includes(id)) {
+    toggleChat(true);
+    $("chat-input").value = "Demo an end-to-end recovery";
+    $("chat-input").focus();
+  } else if (pendingWorkspaceIntent === "manual" && id === "researcher") {
+    $("trajectory-theater").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  pendingWorkspaceIntent = null;
 }
 
 function endRoleSession() {
@@ -478,29 +516,48 @@ function endRoleSession() {
   $("tabs").innerHTML = "";
   $("tabs").hidden = true;
   resetRoleGate();
-  $("role-gate").hidden = false;
-  window.setTimeout(() => $("role-gate-grid").querySelector(".role-card")?.focus(), 80);
-  $("urgent-announcer").textContent = `${previous} session ended. Choose a role to begin a new protected session.`;
+  $("role-gate").hidden = true;
+  document.body.classList.add("public-home");
+  $("chat-toggle").hidden = true;
+  $("role-switch").querySelector(".role-switch-label").textContent = "Explore workspaces";
+  $("role-switch-name").textContent = "Choose role";
+  $("role-switch-avatar").textContent = "↗";
+  $("header-context").textContent = "Clinical memory incident recovery";
+  $("safety-role-note").textContent = "";
+  activateView("overview", { scroll: true });
+  $("urgent-announcer").textContent = `${previous} session ended. Overview is available; choose a role to begin a new session.`;
 }
 
 function initRoles() {
   renderRoleGate();
   $("role-switch").addEventListener("click", (e) => {
     e.stopPropagation();
+    if (!STATE.role) { openRoleGate(); return; }
     $("role-menu").hidden ? openRoleMenu() : closeRoleMenu();
   });
   document.addEventListener("click", (e) => {
     if (!e.target.closest("#role-menu") && !e.target.closest("#role-switch")) closeRoleMenu();
   });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeRoleMenu(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (!$("role-gate").hidden) closeRoleGate();
+    else closeRoleMenu();
+  });
   $("confirm-end-session").addEventListener("click", endRoleSession);
 
   const saved = storedRole();
   if (saved) {
     selectRole(saved);
   } else {
-    $("role-gate").hidden = false;
-    STATE.role = "researcher";       // a safe default until a choice is made
+    STATE.role = null;
+    $("role-gate").hidden = true;
+    document.body.classList.add("public-home");
+    $("tabs").hidden = true;
+    $("chat-toggle").hidden = true;
+    $("role-switch").querySelector(".role-switch-label").textContent = "Explore workspaces";
+    $("role-switch-name").textContent = "Choose role";
+    $("role-switch-avatar").textContent = "↗";
+    activateView("overview", { scroll: false });
   }
 }
 
@@ -558,6 +615,10 @@ function initAccessibility() {
 
 function initPersistentHelp() {
   $("help-button").addEventListener("click", () => {
+    if (!STATE.role && $("role-gate").hidden) {
+      openRoleGate();
+      return;
+    }
     if (!$("role-gate").hidden) {
       $("role-gate-grid").querySelector(".role-card")?.focus();
       $("urgent-announcer").textContent = "Choose your role, then confirm your workspace.";
@@ -890,6 +951,10 @@ function initQuickLab() {
   $("trajectory-canvas").innerHTML = '<div class="trajectory-empty">Select an incident family, then inject a synthetic failure to reveal its dependency field.</div>';
 
   $("btn-quick-inject").addEventListener("click", async () => {
+    if (!STATE.role) {
+      openRoleGate({ preferredRole: "researcher", intent: "manual" });
+      return;
+    }
     const btn = $("btn-quick-inject");
     btn.disabled = true;
     $("btn-quick-recover").disabled = true;
@@ -932,6 +997,10 @@ function initQuickLab() {
   });
 
   $("btn-quick-recover").addEventListener("click", async () => {
+    if (!STATE.role) {
+      openRoleGate({ preferredRole: "researcher", intent: "manual" });
+      return;
+    }
     if (!STATE.quickIncident) return;
     const btn = $("btn-quick-recover");
     btn.disabled = true;
@@ -960,7 +1029,18 @@ function initQuickLab() {
     }
   });
 
+  $("btn-hero-agent").addEventListener("click", () => {
+    if (!STATE.role) { openRoleGate({ preferredRole: "safety", intent: "agent" }); return; }
+    if (["safety", "researcher"].includes(STATE.role)) {
+      toggleChat(true);
+      $("chat-input").value = "Demo an end-to-end recovery";
+      $("chat-input").focus();
+    } else {
+      toast("Open the Safety or Researcher workspace for this demo");
+    }
+  });
   $("btn-hero-inject").addEventListener("click", () => {
+    if (!STATE.role) { openRoleGate({ preferredRole: "researcher", intent: "manual" }); return; }
     $("trajectory-theater").scrollIntoView({ behavior: "smooth", block: "center" });
     window.setTimeout(() => $("btn-quick-inject").click(), 450);
   });
@@ -2996,16 +3076,20 @@ function markTourSeen(id) {
   } catch (e) { /* storage blocked */ }
 }
 
-const TOUR = { steps: [], at: 0, id: null };
+const TOUR = { steps: [], at: 0, id: null, pending: null };
 
 function startTour(id, { force = false } = {}) {
   const steps = TOURS[id];
   if (!steps || (!force && seenTours().includes(id))) return;
+  if (TOUR.pending !== null) window.cancelAnimationFrame(TOUR.pending);
   TOUR.steps = steps;
   TOUR.at = 0;
   TOUR.id = id;
-  // Let the role's views paint before anchoring to them.
-  window.setTimeout(() => showTourStep(), 650);
+  // Paint the role's view before anchoring, without interrupting a later action.
+  TOUR.pending = window.requestAnimationFrame(() => {
+    TOUR.pending = null;
+    if (TOUR.id === id) showTourStep();
+  });
 }
 
 function showTourStep() {
@@ -3041,10 +3125,15 @@ function showTourStep() {
 }
 
 function endTour() {
+  if (TOUR.pending !== null) window.cancelAnimationFrame(TOUR.pending);
+  TOUR.pending = null;
   $("coach").hidden = true;
   document.querySelectorAll(".coach-target").forEach((n) =>
     n.classList.remove("coach-target"));
   if (TOUR.id) markTourSeen(TOUR.id);
+  TOUR.steps = [];
+  TOUR.at = 0;
+  TOUR.id = null;
 }
 
 function initTour() {
@@ -3153,7 +3242,7 @@ function initChat() {
   renderAssistantWelcome();
   renderSuggestions();
   refreshChatBudget();
-  if ($("role-gate").hidden) primeChat();
+  if (STATE.role) primeChat();
   loadOperatorCases();
   updateOperatorContext();
 }

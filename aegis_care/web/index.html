@@ -9,7 +9,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2307151b'/%3E%3Crect x='7' y='17' width='4' height='8' fill='%2372e4df'/%3E%3Crect x='14' y='8' width='4' height='17' fill='%2372e4df'/%3E%3Crect x='21' y='13' width='4' height='12' fill='%2372e4df'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/static/styles.css?v=20261030-review2">
   <link rel="preload" as="font" type="font/woff2" href="/static/assets/fonts/Geist-Variable.woff2" crossorigin>
-  <link rel="stylesheet" href="/static/fx.css?v=20261030-fx1">
+  <link rel="stylesheet" href="/static/fx.css?v=20261030-demo-entry3">
 </head>
 <body>
 <script>
@@ -64,8 +64,10 @@
 
 
 <!-- ============ ROLE SELECTION (first run) ============ -->
-<div class="role-gate" id="role-gate" hidden>
+<div class="role-gate" id="role-gate" role="dialog" aria-modal="true"
+     aria-label="Choose a workspace" hidden>
   <div class="role-gate-inner">
+    <button class="gate-back" id="gate-back" type="button">← Back to overview</button>
     <section class="login-hero" aria-label="AEGIS-Care secure workspace access">
       <div class="login-hero-image" aria-hidden="true"></div>
       <div class="login-hero-scrim" aria-hidden="true"></div>
@@ -90,9 +92,10 @@
     </section>
     <div class="role-gate-head">
       <div class="gate-kicker">Begin a protected session</div>
-      <h2>Choose the workspace for your role</h2>
-      <p>Each workspace shows only the tasks and information that person needs. Choose
-        your role and confirm it. To use a different role later, end this session first.</p>
+      <h2>Choose a view of the same incident</h2>
+      <p>The safety officer contains it, the care team checks patient records, compliance
+        audits the boundary, and the researcher inspects the evidence. Choose a role to
+        run the live workflow.</p>
     </div>
     <div class="role-gate-layout">
       <div>
@@ -313,8 +316,9 @@
           influence inside each authorised runtime, rebuilds safe state from FHIR, and
           prevents the withdrawn version from returning.</p>
         <div class="hero-actions">
-          <button class="hero-cta" id="btn-hero-inject"><span>Inject a trajectory</span><b aria-hidden="true">↗</b></button>
-          <button class="hero-secondary" data-view-target="evidence">Inspect the evidence <span>→</span></button>
+          <button class="hero-cta" id="btn-hero-agent"><span>Watch AEGIS act</span><b aria-hidden="true">↗</b></button>
+          <button class="hero-secondary" id="btn-hero-inject">Manual trajectory <span>→</span></button>
+          <button class="hero-secondary" data-view-target="evidence">Inspect evidence <span>→</span></button>
         </div>
       </div>
       <div class="hero-readout" aria-label="Live evidence readout">
@@ -364,7 +368,7 @@
         </div>
         <div class="proof-bars" id="proof-bars" aria-label="Recovery comparison chart">
           <div class="proof-bar" style="--score:.00;--delay:.05s"><span><b>0%</b><i></i></span><label>Seed delete<br><small>descendant recall</small></label></div>
-          <div class="proof-bar" style="--score:.44;--delay:.15s"><span><b>44%</b><i></i></span><label>Lineage only<br><small>descendant recall</small></label></div>
+          <div class="proof-bar" style="--score:.478;--delay:.15s"><span><b>48%</b><i></i></span><label>Lineage only<br><small>descendant recall</small></label></div>
           <div class="proof-bar muted-bar" style="--score:.00;--delay:.25s"><span><b>0%</b><i></i></span><label>Full reset<br><small>clean state retained</small></label></div>
           <div class="proof-bar care-bar" style="--score:1;--delay:.35s"><span><b>100%</b><i></i></span><label>Full CARE<br><small>recall · precision · retention</small></label></div>
         </div>
@@ -707,7 +711,7 @@
 <div class="toast-stack" id="toast-stack" role="status" aria-live="polite" aria-atomic="false"></div>
 <div class="sr-only" id="urgent-announcer" role="status" aria-live="assertive" aria-atomic="true"></div>
 
-<script src="/static/app.js?v=20261030-referrals1"></script>
+<script src="/static/app.js?v=20261030-demo-entry3"></script>
 <script src="/static/fx.js?v=20261030-fx1" defer></script>
 </body>
 </html>
