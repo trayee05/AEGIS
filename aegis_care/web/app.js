@@ -2011,6 +2011,10 @@ function renderPatientRecord(data, out) {
       ? "Keep held information out of handovers until a reviewer checks the source chart."
       : "A handover or reported concern is awaiting review.";
     if (pending.length) advice += ` ${pending.join(" · ")}.`;
+  } else if (ss.safety_referrals) {
+    verdict = "Assistant answer concern sent to Clinical Safety";
+    tone = "bad";
+    advice = "Safety is checking whether the reported answer affected assistant memory. This does not mean a source record was held or memory spread was proven.";
   } else if (s.corrected) {
     verdict = `${s.corrected} record${s.corrected === 1 ? " was" : "s were"} corrected`;
     tone = "good";
@@ -2052,7 +2056,7 @@ function renderPatientRecord(data, out) {
     $("records-search").focus({ preventScroll: true });
   });
 
-  const needsReview = s.held || ss.source_held || ss.held_transfers || ss.open_reports;
+  const needsReview = s.held || ss.source_held || ss.held_transfers || ss.open_reports || ss.safety_referrals;
   const tabNames = [
     ["summary", "Summary"], ["records", `Records (${ss.source_records})`],
     ["handover", "Handover"], ["report", "Report a concern"],
@@ -2102,13 +2106,16 @@ function renderPatientRecord(data, out) {
   });
 
   const next = el("section", `record-next-step ${needsReview ? "is-alert" : "is-safe"}`);
+  const sourceNeedsReview = s.held || ss.source_held || ss.held_transfers || ss.open_reports;
   next.innerHTML = `<div class="record-next-copy">
       <strong>${needsReview ? "What to do now" : "Ready for the next task"}</strong>
-      <span>${needsReview
+      <span>${ss.safety_referrals && !sourceNeedsReview
+        ? "Clinical Safety has the reported assistant answer. Check Report a concern for its status; a memory incident has not been established."
+        : needsReview
         ? "Open Records to see the flagged items. Keep held information out of use and ask a reviewer to verify the source chart. Nurses cannot approve quarantined records."
         : "The identity and source-status checks found no mismatch. You can review records, prepare a handover, or raise a concern."}</span>
     </div><div class="patient-primary-actions">
-      <button class="btn" type="button" data-go="records">${needsReview ? "Review flagged records" : "View records"}</button>
+      <button class="btn" type="button" data-go="${ss.safety_referrals && !sourceNeedsReview ? "report" : "records"}">${ss.safety_referrals && !sourceNeedsReview ? "See safety referral" : needsReview ? "Review flagged records" : "View records"}</button>
       <button class="btn outline" type="button" data-go="handover">Start a handover</button>
       <button class="btn ghost" type="button" data-go="report">Report a concern</button>
     </div>`;
@@ -2124,13 +2131,15 @@ function renderPatientRecord(data, out) {
   panels.summary.appendChild(sourceStats);
 
   const flagged = data.source_records.filter((r) => r.status === "held");
-  if (flagged.length || ss.open_reports || ss.held_transfers) {
+  if (flagged.length || ss.open_reports || ss.held_transfers || ss.safety_referrals) {
     panels.summary.appendChild(el("h4", "record-section", "Why this needs attention"));
     const issues = el("div", "patient-issue-list");
     flagged.slice(0, 4).forEach((r) => issues.appendChild(el("div", "patient-issue",
       `<b>${esc(r.label)}</b><span>${esc(r.issues.join(" "))}</span>`)));
     if (ss.open_reports) issues.appendChild(el("div", "patient-issue",
       `<b>${ss.open_reports} open manual concern${ss.open_reports === 1 ? "" : "s"}</b><span>A person noticed something the automated check cannot judge.</span>`));
+    if (ss.safety_referrals) issues.appendChild(el("div", "patient-issue",
+      `<b>${ss.safety_referrals} Clinical Safety referral${ss.safety_referrals === 1 ? "" : "s"}</b><span>A reported assistant answer needs investigation; memory impact is not yet established.</span>`));
     if (ss.held_transfers) issues.appendChild(el("div", "patient-issue",
       `<b>${ss.held_transfers} blocked handover${ss.held_transfers === 1 ? "" : "s"}</b><span>No mismatched record was moved to another chart.</span>`));
     panels.summary.appendChild(issues);
@@ -2193,10 +2202,11 @@ function renderPatientRecord(data, out) {
   panels.handover.appendChild(transferForm);
 
   panels.report.appendChild(el("div", "patient-panel-intro",
-    "<h4>Report what you noticed</h4><p>Use this when identity checks cannot determine whether a record is correct. Your concern holds the selected record for review.</p>"));
+    "<h4>Report what you noticed</h4><p>Choose whether the concern is about a source record or an assistant answer. Source record concerns hold the selected record for Compliance review. Assistant answer concerns go to Clinical Safety for investigation.</p>"));
   const reportForm = el("form", "registry-form patient-form");
   reportForm.id = "manual-report-form";
-  reportForm.innerHTML = `<label>Record<select name="record_key"><option value="">General patient concern</option></select></label>
+  reportForm.innerHTML = `<label>What is affected?<select name="concern_type"><option value="source_record">A source record in the patient chart</option><option value="assistant_memory">An assistant answer, summary, or remembered fact</option></select></label>
+    <label>Record, if relevant<select name="record_key"><option value="">No specific source record</option></select></label>
     <label>What concerns you?<textarea name="description" required minlength="10" maxlength="1000" placeholder="For example: the symptom was reported for another visit"></textarea></label>
     <button class="btn outline" type="submit">Send for review</button>
     <div class="form-result" aria-live="polite"></div>`;
@@ -2241,7 +2251,9 @@ function renderPatientRecord(data, out) {
       const body = { ...Object.fromEntries(new FormData(reportForm)), patient_id: p.id };
       if (!body.record_key) body.record_key = null;
       await api("/api/registry/reports", { method: "POST", body: JSON.stringify(body) });
-      const message = "Concern recorded. A reviewer can now see it in the queue.";
+      const message = body.concern_type === "assistant_memory"
+        ? "Concern sent to Clinical Safety for triage. This does not prove that assistant memory was affected."
+        : "Concern recorded. A reviewer can now see it in the queue.";
       STATE.patientPanel = "report";
       STATE.patientFlash = { panel: "report", patient: p.id, message, tone: "warn" };
       $("urgent-announcer").textContent = message;
@@ -2260,7 +2272,10 @@ function renderPatientRecord(data, out) {
     panels.report.appendChild(el("h4", "record-section", "Your recent concerns"));
     const history = el("div", "registry-history");
     data.manual_reports.slice(0, 8).forEach((r) => history.appendChild(el("p", null,
-      `<b>${esc(r.status === "open" ? "Awaiting review" : r.status === "resolved" ? "Addressed" : "Dismissed")}</b> · ${esc(r.description)}${r.resolution_note ? `<br><small>Review note: ${esc(r.resolution_note)}</small>` : ""}`)));
+      `<b>${esc(r.concern_type === "assistant_memory" ?
+        r.safety_status === "investigating" ? "Safety investigating" :
+        r.safety_status === "no_memory_impact" ? "No memory impact found" : "Awaiting Safety triage" :
+        r.status === "open" ? "Awaiting review" : r.status === "resolved" ? "Addressed" : "Dismissed")}</b> · ${esc(r.description)}${r.safety_note || r.resolution_note ? `<br><small>Review note: ${esc(r.safety_note || r.resolution_note)}</small>` : ""}`)));
     panels.report.appendChild(history);
   }
   if (data.source_corrections?.length) {
@@ -2364,7 +2379,7 @@ const PROV_COPY = {
 };
 
 function initCommandView() {
-  if (STATE.commandReady) { renderCommandStatus(); return; }
+  if (STATE.commandReady) { renderCommandStatus(); loadSafetyReferrals(); return; }
   STATE.commandReady = true;
 
   const fam = $("cmd-family");
@@ -2384,6 +2399,46 @@ function initCommandView() {
 
   $("btn-cmd-inject").addEventListener("click", commandInject);
   $("btn-cmd-recover").addEventListener("click", commandRecover);
+  $("btn-safety-referrals-refresh").addEventListener("click", loadSafetyReferrals);
+  loadSafetyReferrals();
+}
+
+async function loadSafetyReferrals() {
+  const out = $("safety-referrals-result");
+  try {
+    const data = await api("/api/safety/referrals");
+    out.innerHTML = "";
+    if (!data.referrals.length) {
+      out.appendChild(el("p", "hint", "No nurse reports about assistant answers or memory yet. The incident controls above create a separate synthetic recovery test."));
+      return;
+    }
+    data.referrals.forEach((item) => {
+      const card = el("div", "queue-card");
+      card.innerHTML = `<div class="queue-head"><strong>Patient ${esc(item.patient_id)} · ${esc(item.safety_status || "pending")}</strong><span class="mono muted">Report #${esc(item.id)}</span></div>
+        <div class="queue-reason"><span aria-hidden="true">!</span><span>${esc(item.description)}</span></div>
+        <p class="small muted queue-guidance">${esc(item.record_key || "No source record selected")} · This is a referral for investigation, not proof of memory spread. The synthetic incident controls above are separate.</p>`;
+      if (item.safety_note) card.appendChild(el("p", "small muted queue-guidance", `Safety note: ${esc(item.safety_note)}`));
+      if (item.safety_status === "pending" || item.safety_status === "investigating") {
+        const form = el("form", "queue-actions registry-review-form");
+        form.innerHTML = `<label>Safety assessment note<textarea required minlength="10" maxlength="1000" placeholder="What assistant answer or memory did you check?"></textarea></label><button class="btn small" type="submit" value="investigating">${item.safety_status === "pending" ? "Start investigation" : "Update investigation"}</button><button class="btn small ghost" type="submit" value="no_memory_impact">No memory impact found</button><span class="form-result" aria-live="polite"></span>`;
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const result = form.querySelector(".form-result");
+          try {
+            await api(`/api/safety/referrals/${item.id}/triage`, {
+              method: "POST", body: JSON.stringify({
+                decision: event.submitter?.value === "no_memory_impact" ? "no_memory_impact" : "investigating",
+                note: form.querySelector("textarea").value,
+              }),
+            });
+            await loadSafetyReferrals();
+          } catch (error) { result.textContent = error.message; }
+        });
+        card.appendChild(form);
+      }
+      out.appendChild(card);
+    });
+  } catch (error) { out.innerHTML = `<div class="notice bad">${esc(error.message)}</div>`; }
 }
 
 function renderCommandSteps(activeIndex, done = -1) {

@@ -485,6 +485,42 @@ class TestClinicalRegistry:
         assert dismissed.status_code == 200
         assert client.get("/api/patients/S1000/record").json()["source_summary"]["open_reports"] == 0
 
+    def test_assistant_answer_report_routes_to_safety_without_source_hold(self, client):
+        record = client.get("/api/patients/S1000/record").json()["source_records"][0]
+        created = client.post("/api/registry/reports", json={
+            "patient_id": "S1000", "record_key": record["record_key"],
+            "description": "The assistant used a fact from the wrong patient in its answer.",
+            "concern_type": "assistant_memory",
+        })
+        assert created.status_code == 200, created.text
+        report_id = created.json()["id"]
+        assert created.json()["safety_status"] == "pending"
+        assert all(item.get("report_id") != report_id
+                   for item in client.get("/api/review/queue").json()["registry_items"])
+        summary = client.get("/api/patients/S1000/record").json()["source_summary"]
+        assert summary["open_reports"] == 0
+        assert summary["safety_referrals"] == 1
+        listing = client.get("/api/patients", params={"only_with_memory": False}).json()
+        assert next(row for row in listing["patients"] if row["token"] == "S1000")["status"] == "attention"
+        referrals = client.get("/api/safety/referrals").json()
+        assert referrals["pending"] == 1
+        assert referrals["referrals"][0]["id"] == report_id
+        assert client.get("/api/cases", params={"role": "safety"}).json()["count"] == 0
+        triaged = client.post(f"/api/safety/referrals/{report_id}/triage", json={
+            "decision": "investigating", "note": "Checking whether this answer entered assistant memory.",
+        })
+        assert triaged.status_code == 200, triaged.text
+        assert client.get("/api/safety/referrals").json()["pending"] == 0
+        assert client.get("/api/patients/S1000/record").json()["manual_reports"][0]["safety_status"] == "investigating"
+        closed = client.post(f"/api/safety/referrals/{report_id}/triage", json={
+            "decision": "no_memory_impact",
+            "note": "Checked the assistant entry and found no stored memory impact.",
+        })
+        assert closed.status_code == 200
+        detail = client.get("/api/patients/S1000/record").json()
+        assert detail["manual_reports"][0]["status"] == "resolved"
+        assert detail["source_summary"]["safety_referrals"] == 0
+
     def test_source_chart_correction_and_separate_manual_resolution(self, client):
         key = "Observation/S1029-OBS1"
         source_chart, filed_chart = "S1029", "S1030"

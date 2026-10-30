@@ -216,6 +216,13 @@
     </div>
 
     <div class="spacer"></div>
+    <div class="panel" id="safety-referrals-panel">
+      <h3>Reports about assistant answers or memory</h3>
+      <p class="hint">Nurse reports about possible spread appear here for safety triage. A referral does not prove that assistant memory was affected.</p>
+      <button class="btn ghost small" id="btn-safety-referrals-refresh" type="button">Refresh reports</button>
+      <div id="safety-referrals-result"></div>
+    </div>
+    <div class="spacer"></div>
     <div id="command-outcome"></div>
   </section>
 
@@ -700,7 +707,7 @@
 <div class="toast-stack" id="toast-stack" role="status" aria-live="polite" aria-atomic="false"></div>
 <div class="sr-only" id="urgent-announcer" role="status" aria-live="assertive" aria-atomic="true"></div>
 
-<script src="/static/app.js?v=20261030-review2"></script>
+<script src="/static/app.js?v=20261030-referrals1"></script>
 <script src="/static/fx.js?v=20261030-fx1" defer></script>
 </body>
 </html>

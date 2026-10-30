@@ -131,6 +131,12 @@ class ClinicalRegistry:
             report_columns = {row[1] for row in db.execute("PRAGMA table_info(manual_reports)")}
             if "resolution_note" not in report_columns:
                 db.execute("ALTER TABLE manual_reports ADD COLUMN resolution_note TEXT")
+            if "concern_type" not in report_columns:
+                db.execute("ALTER TABLE manual_reports ADD COLUMN concern_type TEXT NOT NULL DEFAULT 'source_record'")
+            if "safety_status" not in report_columns:
+                db.execute("ALTER TABLE manual_reports ADD COLUMN safety_status TEXT")
+            if "safety_note" not in report_columns:
+                db.execute("ALTER TABLE manual_reports ADD COLUMN safety_note TEXT")
             fixture = generate_bundle(PATIENT_COUNT)
             names = _distinct_registry_names(fixture["Patient"])
             if db.execute("SELECT COUNT(*) FROM patients").fetchone()[0]:
@@ -180,6 +186,7 @@ class ClinicalRegistry:
                 "ORDER BY resource_type, label, record_key", (patient_id,)).fetchall()
             reports = {row[0] for row in db.execute(
                 "SELECT record_key FROM manual_reports WHERE status = 'open' "
+                "AND concern_type = 'source_record' "
                 "AND record_key IS NOT NULL")}
         out = []
         for row in rows:
@@ -292,7 +299,8 @@ class ClinicalRegistry:
             if resource.get("_aegisRestricted"):
                 issues.append("Restricted record needs authorised review before transfer.")
             if db.execute("SELECT 1 FROM manual_reports WHERE record_key = ? "
-                          "AND status = 'open' LIMIT 1", (record_key,)).fetchone():
+                          "AND status = 'open' AND concern_type = 'source_record' LIMIT 1",
+                          (record_key,)).fetchone():
                 issues.append("This record has an open manual safety report.")
             status = "held" if issues else "completed"
             explanation = " ".join(issues) if issues else \
@@ -312,7 +320,9 @@ class ClinicalRegistry:
                     "explanation": explanation, "issues": issues}
 
     def report(self, patient_id: str, record_key: Optional[str],
-               description: str) -> Dict[str, Any]:
+               description: str, concern_type: str = "source_record") -> Dict[str, Any]:
+        if concern_type not in {"source_record", "assistant_memory"}:
+            raise ValueError("Choose source record or assistant memory concern.")
         if not self.patient(patient_id):
             raise KeyError("Patient not found.")
         if record_key:
@@ -326,13 +336,44 @@ class ClinicalRegistry:
             raise ValueError("Describe the concern in at least 10 characters.")
         with self._connect() as db:
             cursor = db.execute(
-                "INSERT INTO manual_reports (patient_id, record_key, description, status, created_at) "
-                "VALUES (?, ?, ?, 'open', ?)",
-                (patient_id, record_key, description[:1000], _now()),
+                "INSERT INTO manual_reports (patient_id, record_key, description, status, created_at, concern_type, safety_status) "
+                "VALUES (?, ?, ?, 'open', ?, ?, ?)",
+                (patient_id, record_key, description[:1000], _now(), concern_type,
+                 "pending" if concern_type == "assistant_memory" else None),
             )
             return {"id": cursor.lastrowid, "patient_id": patient_id,
                     "record_key": record_key, "status": "open",
-                    "description": description[:1000]}
+                    "description": description[:1000], "concern_type": concern_type,
+                    "safety_status": "pending" if concern_type == "assistant_memory" else None}
+
+    def safety_referrals(self) -> List[Dict[str, Any]]:
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT id, patient_id, record_key, description, status, created_at, "
+                "safety_status, safety_note FROM manual_reports "
+                "WHERE concern_type = 'assistant_memory' ORDER BY id DESC"
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def triage_safety_referral(self, report_id: int, decision: str, note: str) -> Dict[str, Any]:
+        if decision not in {"investigating", "no_memory_impact"}:
+            raise ValueError("Choose investigate or no memory impact.")
+        note = note.strip()
+        if len(note) < 10:
+            raise ValueError("Document the safety assessment in at least 10 characters.")
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT id FROM manual_reports WHERE id = ? AND concern_type = 'assistant_memory'",
+                (report_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError("Assistant-memory referral not found.")
+            db.execute("UPDATE manual_reports SET safety_status = ?, safety_note = ?, "
+                       "status = CASE WHEN ? = 'no_memory_impact' THEN 'resolved' ELSE status END, "
+                       "resolution_note = CASE WHEN ? = 'no_memory_impact' THEN ? ELSE resolution_note END "
+                       "WHERE id = ?", (decision, note[:1000], decision, decision,
+                                        note[:1000], report_id))
+            return {"id": report_id, "safety_status": decision, "safety_note": note[:1000]}
 
     def review_items(self) -> List[Dict[str, Any]]:
         """Open manual concerns and automatically detected chart mismatches."""
@@ -348,7 +389,9 @@ class ClinicalRegistry:
                 "SELECT manual_reports.*, source_records.resource_json "
                 "FROM manual_reports LEFT JOIN source_records "
                 "ON source_records.record_key = manual_reports.record_key "
-                "WHERE manual_reports.status = 'open' ORDER BY manual_reports.id DESC")]
+                "WHERE manual_reports.status = 'open' "
+                "AND manual_reports.concern_type = 'source_record' "
+                "ORDER BY manual_reports.id DESC")]
             mismatches = [dict(row) for row in db.execute(
                 "SELECT record_key, chart_patient_id, source_patient_id, label, resource_json "
                 "FROM source_records WHERE chart_patient_id != source_patient_id "
@@ -407,7 +450,13 @@ class ClinicalRegistry:
                 "OR target_patient_id = ? GROUP BY status", (patient_id, patient_id)))
             open_reports = db.execute(
                 "SELECT COUNT(*) FROM manual_reports WHERE patient_id = ? "
-                "AND status = 'open'", (patient_id,)).fetchone()[0]
+                "AND status = 'open' AND concern_type = 'source_record'",
+                (patient_id,)).fetchone()[0]
+            safety_referrals = db.execute(
+                "SELECT COUNT(*) FROM manual_reports WHERE patient_id = ? "
+                "AND concern_type = 'assistant_memory' "
+                "AND safety_status IN ('pending', 'investigating')",
+                (patient_id,)).fetchone()[0]
             source_corrected = db.execute(
                 "SELECT COUNT(*) FROM source_corrections WHERE from_patient_id = ?",
                 (patient_id,)).fetchone()[0]
@@ -417,6 +466,7 @@ class ClinicalRegistry:
             "completed_transfers": transfer_counts.get("completed", 0),
             "held_transfers": transfer_counts.get("held", 0),
             "open_reports": open_reports,
+            "safety_referrals": safety_referrals,
             "source_corrected": source_corrected,
         }
 

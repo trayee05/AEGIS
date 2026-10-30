@@ -175,6 +175,7 @@ class ManualReportRequest(BaseModel):
     patient_id: str = Field(..., min_length=2, max_length=32)
     record_key: Optional[str] = Field(None, max_length=160)
     description: str = Field(..., min_length=10, max_length=1000)
+    concern_type: str = Field("source_record", description="source_record | assistant_memory")
 
 
 class ReportResolutionRequest(BaseModel):
@@ -447,14 +448,16 @@ def list_patients(only_with_memory: bool = True) -> Dict[str, Any]:
     for token, bucket in buckets.items():
         source = state.registry.summary(token) if state.registry.patient(token) else {
             "source_records": 0, "source_held": 0, "completed_transfers": 0,
-            "held_transfers": 0, "open_reports": 0, "source_corrected": 0,
+            "held_transfers": 0, "open_reports": 0, "safety_referrals": 0,
+            "source_corrected": 0,
         }
         # One plain-language status per patient - this is what a nurse reads.
         # A patient whose only remaining records were withdrawn is NOT "no
         # issues": entries were wrongly filed against them and then removed,
         # and the clinician needs to know that happened.
         live = bucket["active"] + bucket["repaired"]
-        if bucket["quarantined"] or source["source_held"] or source["held_transfers"] or source["open_reports"]:
+        if (bucket["quarantined"] or source["source_held"] or source["held_transfers"]
+                or source["open_reports"] or source["safety_referrals"]):
             status, headline = "attention", "Record needs review"
         elif bucket["under_review"]:
             status, headline = "checking", "Being checked"
@@ -521,7 +524,8 @@ def patient_record(patient_id: str) -> Dict[str, Any]:
     source_records = state.registry.records(patient_id) if fixed else []
     source_summary = state.registry.summary(patient_id) if fixed else {
         "source_records": 0, "source_held": 0, "completed_transfers": 0,
-        "held_transfers": 0, "open_reports": 0, "source_corrected": 0,
+        "held_transfers": 0, "open_reports": 0, "safety_referrals": 0,
+        "source_corrected": 0,
     }
     return {
         "patient": _patient_display(env, patient_id),
@@ -573,7 +577,30 @@ def report_record(req: ManualReportRequest) -> Dict[str, Any]:
     try:
         with state.lock:
             return state.registry.report(req.patient_id, req.record_key,
-                                         req.description)
+                                         req.description, req.concern_type)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+class SafetyTriageRequest(BaseModel):
+    decision: str = Field(..., description="investigating | no_memory_impact")
+    note: str = Field(..., min_length=10, max_length=1000)
+
+
+@app.get("/api/safety/referrals")
+def list_safety_referrals() -> Dict[str, Any]:
+    rows = state.registry.safety_referrals()
+    return {"count": len(rows), "pending": sum(r["safety_status"] == "pending" for r in rows),
+            "referrals": rows}
+
+
+@app.post("/api/safety/referrals/{report_id}/triage")
+def triage_safety_referral(report_id: int, req: SafetyTriageRequest) -> Dict[str, Any]:
+    try:
+        with state.lock:
+            return state.registry.triage_safety_referral(report_id, req.decision, req.note)
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:
@@ -1533,6 +1560,13 @@ def assistant(req: AssistantRequest) -> Dict[str, Any]:
                             f"{source['held_transfers']} blocked handover(s), and "
                             f"{source['open_reports']} manual concern(s). "
                             "Do not rely on held items; open the patient page to review why.")
+                    elif source["safety_referrals"]:
+                        verdict = (
+                            f"{source['source_records']} source record(s) and "
+                            f"{total} assistant memory entries; "
+                            f"{source['safety_referrals']} reported assistant-answer "
+                            "concern(s) awaiting Clinical Safety investigation. "
+                            "Memory impact has not been established.")
                     elif summary["held"]:
                         verdict = (
                             f"{total} total record(s) in assistant memory; {summary['held']} are held for "
